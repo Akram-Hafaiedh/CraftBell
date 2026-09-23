@@ -66,17 +66,22 @@ end
 -- template selection, the {fee} placeholder, and realm-mismatch state.
 -- Returns whisperMessage (or nil if blocked), isMismatched, isBlocked
 ----------------------------------------------------------------------
+-- DROP-IN replacement for BuildRecipeWhisper in Modules/AlertFrame.lua
+-- Uses assigned owner (multi-character) instead of the old single `character` field.
+
 local function BuildRecipeWhisper(recipeData)
     if not recipeData then return nil, false, false end
 
     local currentPlayer = ns.GetPlayerFullName()
-    local recipeOwner = (recipeData.character and recipeData.character.fullName) or currentPlayer
+    local owner = ns.GetRecipeCharacterView and ns.GetRecipeCharacterView(recipeData)
+        or (recipeData.character)
+    local recipeOwner = (owner and owner.fullName) or currentPlayer
     local isCrossChar = recipeOwner ~= currentPlayer
 
     local isMismatched = false
     local isBlocked = false
-    if recipeData.character and recipeData.character.realm then
-        if not ns.IsRealmCompatible(recipeData.character.realm) then
+    if owner and owner.realm then
+        if not ns.IsRealmCompatible(owner.realm) then
             isMismatched = true
             isBlocked = (ns.db.settings.realmMismatchMode == "block")
         end

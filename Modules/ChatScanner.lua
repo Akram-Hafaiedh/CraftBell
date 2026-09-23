@@ -23,25 +23,28 @@ local function RebuildCache()
     local globalMute = ns.db.settings.concentrationMutedAll
 
     for recipeID, data in pairs(ns.db.trackedRecipes) do
-        local charFullName = data.character and data.character.fullName or ""
+        local owner = ns.GetAssignedOwner and ns.GetAssignedOwner(data)
+        local charFullName = (owner and owner.fullName)
+            or (data.character and data.character.fullName)
+            or ""
 
+        local include = true
         if data.needsConcentration then
             local muteKey = charFullName .. ":" .. (data.professionName or "")
             if globalMute or muted[muteKey] then
                 ns.Debug("ChatScanner: skipping muted recipe — " .. tostring(data.recipeName))
-            else
-                lookupCache[ns.NormalizeString(data.recipeName)] = recipeID
-                count = count + 1
+                include = false
             end
-        else
-            lookupCache[ns.NormalizeString(data.recipeName)] = recipeID
-            count = count + 1
         end
 
-        itemIDCache[recipeID] = recipeID
-        if data.itemLink then
-            for id in pairs(ns.ExtractLinkIDs(data.itemLink)) do
-                itemIDCache[id] = recipeID
+        if include then
+            lookupCache[ns.NormalizeString(data.recipeName)] = recipeID
+            count = count + 1
+            itemIDCache[recipeID] = recipeID
+            if data.itemLink then
+                for id in pairs(ns.ExtractLinkIDs(data.itemLink)) do
+                    itemIDCache[id] = recipeID
+                end
             end
         end
     end

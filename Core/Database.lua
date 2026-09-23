@@ -2,7 +2,7 @@ local addonName, ns = ...
 local L = ns.L
 
 ----------------------------------------------------------------------
--- Internal event bus (simple callback system to decouple modules)
+-- Internal event bus
 ----------------------------------------------------------------------
 local callbacks = {}
 
@@ -22,90 +22,28 @@ function ns.FireCallback(event, ...)
 end
 
 ----------------------------------------------------------------------
--- Alert history (session only — not persisted to SavedVariables)
-----------------------------------------------------------------------
-ns.alertHistory = {}
-
-function ns.AddToHistory(sender, message, matches, recipeNames, alertType, keywordMatches)
-    local aType = alertType or "recipe"
-
-    -- Merge into an existing entry from the same sender + same alert if one
-    -- exists, rather than spamming a new toast for every repeated message.
-    for _, existing in ipairs(ns.alertHistory) do
-        if existing.sender == sender and existing.alertType == aType then
-            local isDuplicate
-            if aType == "keyword" then
-                isDuplicate = true
-            else
-                isDuplicate = (existing.recipeNames == recipeNames)
-            end
-            if isDuplicate then
-                existing.count = (existing.count or 1) + 1
-                existing.time = date("%H:%M:%S")
-                existing.message = message
-                ns.FireCallback("HISTORY_UPDATED")
-                return existing
-            end
-        end
-    end
-
-    local recipeIDs = {}
-    local firstMatchData = nil
-    if matches then
-        for recipeID, data in pairs(matches) do
-            table.insert(recipeIDs, recipeID)
-            if not firstMatchData then
-                firstMatchData = data
-            end
-        end
-    end
-
-    local entry = {
-        time = date("%H:%M:%S"),
-        sender = sender,
-        message = message,
-        recipeNames = recipeNames,
-        recipeIDs = recipeIDs,
-        matchData = firstMatchData,
-        replied = false,
-        alertType = aType,
-        keywordMatches = keywordMatches,
-        count = 1,
-    }
-    table.insert(ns.alertHistory, 1, entry)
-    if #ns.alertHistory > 100 then
-        table.remove(ns.alertHistory)
-    end
-    ns.FireCallback("HISTORY_UPDATED")
-    return entry
-end
-
-----------------------------------------------------------------------
--- SavedVariables schema
+-- SavedVariables schema (v2 — multi-owner + assignment)
 --
 -- trackedRecipes[recipeID] = {
---     recipeName     = "Fire Resistant Cape",
---     itemLink       = "...",
---     tradeSkillLink = "...",
---     professionID   = 197,          -- stable, locale-independent skill line ID
---     professionName = "Tailoring",  -- display only — NEVER used as a lookup key
---     character = {
---         name     = "Goldok",
---         realm    = "Hyjal",
---         fullName = "Goldok-Hyjal",
---     },
+--     recipeName, itemLink, tradeSkillLink,
+--     professionID, professionName,
 --     needsConcentration = false,
+--     owners = {
+--         ["CharName-Realm"] = { name, realm, fullName },
+--     },
+--     assignedCharacter = "CharName-Realm" | nil,
+--         -- preferred character for trade-order whispers when multiple
+--         -- alts know the same recipe (e.g. Mail LW vs Leather LW)
 -- }
 --
 -- settings.professionFees[professionID] = amount
---   Global per-profession fee, resolved at whisper-build time. Kept OUT of
---   the recipe struct so changing your rate doesn't require touching every
---   tracked recipe. A recipe can still override it with feeOverride below.
+-- settings.bulkTrackLearnedOnly = true
+-- settings.bulkTrackSkipConcentration = false
 ----------------------------------------------------------------------
 local defaults = {
     trackedRecipes = {},
-    messageTemplate = nil,       -- set from locale default on first init
-    crossCharTemplate = nil,     -- set from locale default on first init
+    messageTemplate = nil,
+    crossCharTemplate = nil,
     keywords = {
         triggers = { "LF", "WTB", "Need", "LFC", "Seek" },
         pairs = {},
@@ -127,15 +65,12 @@ local defaults = {
         toastOffsetX = -350,
         toastOffsetY = -120,
         toastSize = "medium",
-
-        -- New: per-profession fee table, keyed by professionID (not name)
-        -- Example: { [773] = 50, [164] = 20 }  -- Inscription 50g, Blacksmithing 20g
         professionFees = {},
-
-        -- New: block or just flag whispers to crafters on an incompatible realm
-        -- "warn"  -> show the whisper option with a flag
-        -- "block" -> hide the whisper option entirely
         realmMismatchMode = "warn",
+        -- Bulk track defaults
+        bulkTrackLearnedOnly = true,
+        bulkTrackSkipConcentration = false,
+        bulkTrackAutoAssign = true, -- if recipe has no assignedCharacter, set current char
     },
 }
 
@@ -157,29 +92,91 @@ local function ApplyDefaults(tbl, defaultTbl)
 end
 
 ----------------------------------------------------------------------
--- Migrate a single recipe entry from the old flat schema
--- (characterName = "Name-Realm" string, no professionID) to the new one.
+-- Migrate a single recipe entry to multi-owner schema
 ----------------------------------------------------------------------
 local function MigrateRecipeEntry(data)
+    if not data then return data end
+
+    -- Old flat characterName → character table
     if not data.character and data.characterName then
         local name, realm = ns.ParseNameRealm(data.characterName)
         data.character = { name = name, realm = realm, fullName = data.characterName }
         data.characterName = nil
     end
-    if data.professionID == nil then
-        data.professionID = false -- explicit "unknown", distinct from nil/unset
+
+    -- Old single character → owners map
+    if not data.owners then
+        data.owners = {}
+        if data.character and data.character.fullName then
+            data.owners[data.character.fullName] = {
+                name = data.character.name,
+                realm = data.character.realm,
+                fullName = data.character.fullName,
+            }
+            -- Keep character as a convenience pointer to the assigned (or first) owner
+        end
     end
+
+    if data.professionID == nil then
+        data.professionID = false
+    end
+
+    -- assignedCharacter defaults to the only owner if exactly one exists
+    if data.assignedCharacter == nil then
+        local only = nil
+        local count = 0
+        for fullName in pairs(data.owners) do
+            count = count + 1
+            only = fullName
+        end
+        if count == 1 then
+            data.assignedCharacter = only
+        end
+    end
+
     return data
 end
 
 ----------------------------------------------------------------------
--- One-time import from the original CraftRadar's SavedVariables, if present
--- and this is a fresh CraftBell install. Keeps you from losing recipes you
--- already tracked before switching over.
+-- Resolve which character "owns" this recipe for whisper / display
+----------------------------------------------------------------------
+function ns.GetAssignedOwner(recipeData)
+    if not recipeData then return nil end
+    local owners = recipeData.owners or {}
+
+    if recipeData.assignedCharacter and owners[recipeData.assignedCharacter] then
+        return owners[recipeData.assignedCharacter]
+    end
+
+    -- Prefer the logged-in character if they know it
+    local me = ns.GetPlayerFullName()
+    if owners[me] then
+        return owners[me]
+    end
+
+    -- Fall back to any owner
+    for _, owner in pairs(owners) do
+        return owner
+    end
+    return nil
+end
+
+-- Build a synthetic "character" view used by whisper / realm checks
+function ns.GetRecipeCharacterView(recipeData)
+    local owner = ns.GetAssignedOwner(recipeData)
+    if owner then
+        return owner
+    end
+    -- Legacy fallback
+    return recipeData.character
+end
+
+----------------------------------------------------------------------
+-- One-time import from CraftRadar
 ----------------------------------------------------------------------
 local function ImportFromCraftRadar()
     if not CraftRadarDB or not CraftRadarDB.trackedRecipes then return end
-    if next(CraftBellDB.trackedRecipes) then return end -- don't clobber existing data
+    if next(CraftBellDB.trackedRecipes) then return end
 
     local imported = 0
     for recipeID, data in pairs(CraftRadarDB.trackedRecipes) do
@@ -200,16 +197,8 @@ local function InitializeDB()
     ApplyDefaults(CraftBellDB, defaults)
     ns.db = CraftBellDB
 
-    -- Migrate any recipe entries still in the old flat shape
     for recipeID, data in pairs(ns.db.trackedRecipes) do
         MigrateRecipeEntry(data)
-    end
-
-    if ns.db.messageTemplate == nil then
-        ns.db.messageTemplate = L["DEFAULT_TEMPLATE"]
-    end
-    if ns.db.crossCharTemplate == nil then
-        ns.db.crossCharTemplate = L["DEFAULT_CROSS_TEMPLATE"]
     end
 
     ImportFromCraftRadar()
@@ -227,45 +216,154 @@ end
 ns.InitializeDB = InitializeDB
 
 ----------------------------------------------------------------------
--- Recipe tracking API (new struct: professionID + split character table)
+-- Recipe tracking API — multi-owner aware
 ----------------------------------------------------------------------
-function ns.TrackRecipe(recipeID, recipeName, professionID, professionName, itemLink, tradeSkillLink)
+
+--- Add (or reinforce) the current character as an owner of this recipe.
+--- Does not remove other owners. Optionally becomes assignedCharacter.
+function ns.TrackRecipe(recipeID, recipeName, professionID, professionName, itemLink, tradeSkillLink, opts)
+    opts = opts or {}
     local fullName = ns.GetPlayerFullName()
     local name, realm = ns.ParseNameRealm(fullName)
 
-    ns.db.trackedRecipes[recipeID] = {
-        recipeName = recipeName,
-        itemLink = itemLink,
-        tradeSkillLink = tradeSkillLink,
-        professionID = professionID or false,
-        professionName = professionName,
-        character = {
-            name = name,
-            realm = realm,
-            fullName = fullName,
-        },
-        needsConcentration = false,
+    local entry = ns.db.trackedRecipes[recipeID]
+    if not entry then
+        entry = {
+            recipeName = recipeName,
+            itemLink = itemLink,
+            tradeSkillLink = tradeSkillLink,
+            professionID = professionID or false,
+            professionName = professionName,
+            needsConcentration = opts.needsConcentration or false,
+            owners = {},
+            assignedCharacter = nil,
+        }
+        ns.db.trackedRecipes[recipeID] = entry
+    else
+        -- Refresh display fields from the latest scan
+        entry.recipeName = recipeName or entry.recipeName
+        entry.itemLink = itemLink or entry.itemLink
+        entry.tradeSkillLink = tradeSkillLink or entry.tradeSkillLink
+        if professionID then entry.professionID = professionID end
+        if professionName then entry.professionName = professionName end
+        if opts.needsConcentration ~= nil then
+            entry.needsConcentration = opts.needsConcentration
+        end
+        entry.owners = entry.owners or {}
+    end
+
+    local alreadyOwned = entry.owners[fullName] ~= nil
+    entry.owners[fullName] = {
+        name = name,
+        realm = realm,
+        fullName = fullName,
     }
-    ns.Print((L["RECIPE_TRACKED"] or "Tracking: ") .. (itemLink or recipeName))
+
+    -- Auto-assign rules
+    local shouldAssign = opts.forceAssign
+        or (opts.autoAssign ~= false and ns.db.settings.bulkTrackAutoAssign and not entry.assignedCharacter)
+        or (not entry.assignedCharacter and ns.TableCount(entry.owners) == 1)
+
+    if shouldAssign then
+        entry.assignedCharacter = fullName
+    end
+
+    -- Keep legacy `character` pointer in sync with assigned owner for older UI paths
+    entry.character = ns.GetAssignedOwner(entry)
+
+    -- opts.silent = true suppresses the per-recipe chat line (used by bulk track)
+    if not alreadyOwned and not opts.silent then
+        ns.Print((L["RECIPE_TRACKED"] or "Tracking: ") .. (itemLink or recipeName)
+            .. " |cff888888(" .. fullName .. ")|r")
+    end
     ns.FireCallback("RECIPE_TRACKED", recipeID)
+    return entry, not alreadyOwned
 end
 
-function ns.UntrackRecipe(recipeID)
+--- Remove the current character as an owner. If no owners remain, drop the recipe.
+function ns.UntrackRecipe(recipeID, characterFullName)
     local data = ns.db.trackedRecipes[recipeID]
-    if data then
+    if not data then return end
+
+    local target = characterFullName or ns.GetPlayerFullName()
+    if data.owners then
+        data.owners[target] = nil
+    end
+
+    if data.assignedCharacter == target then
+        data.assignedCharacter = nil
+        -- Re-assign to any remaining owner
+        for fullName in pairs(data.owners or {}) do
+            data.assignedCharacter = fullName
+            break
+        end
+    end
+
+    local remaining = ns.TableCount(data.owners or {})
+    if remaining == 0 then
         ns.Print((L["RECIPE_REMOVED"] or "Removed: ") .. (data.itemLink or data.recipeName))
         ns.db.trackedRecipes[recipeID] = nil
-        ns.FireCallback("RECIPE_UNTRACKED", recipeID)
+    else
+        ns.Print((L["OWNER_REMOVED"] or "Removed owner: ") .. target
+            .. " — " .. (data.itemLink or data.recipeName))
+        data.character = ns.GetAssignedOwner(data)
     end
+    ns.FireCallback("RECIPE_UNTRACKED", recipeID)
 end
 
 function ns.IsRecipeTracked(recipeID)
     return ns.db.trackedRecipes[recipeID] ~= nil
 end
 
+function ns.DoesCharacterOwnRecipe(recipeID, characterFullName)
+    local data = ns.db.trackedRecipes[recipeID]
+    if not data or not data.owners then return false end
+    return data.owners[characterFullName or ns.GetPlayerFullName()] ~= nil
+end
+
+--- Set (or clear) the preferred character for trade-order replies on this recipe.
+function ns.AssignRecipeCharacter(recipeID, characterFullName)
+    local data = ns.db.trackedRecipes[recipeID]
+    if not data then return false end
+    if characterFullName and data.owners and not data.owners[characterFullName] then
+        ns.Print(L["ASSIGN_NOT_OWNER"] or "That character does not own this recipe.")
+        return false
+    end
+    data.assignedCharacter = characterFullName
+    data.character = ns.GetAssignedOwner(data)
+    ns.FireCallback("RECIPE_ASSIGNED", recipeID, characterFullName)
+    ns.Print(string.format(L["RECIPE_ASSIGNED"] or "Assigned %s → %s",
+        data.itemLink or data.recipeName or tostring(recipeID),
+        characterFullName or (L["ASSIGN_NONE"] or "none")))
+    return true
+end
+
+--- Cycle assigned character among owners (for quick UI toggles).
+function ns.CycleAssignedCharacter(recipeID)
+    local data = ns.db.trackedRecipes[recipeID]
+    if not data or not data.owners then return nil end
+
+    local list = {}
+    for fullName in pairs(data.owners) do
+        table.insert(list, fullName)
+    end
+    table.sort(list)
+    if #list == 0 then return nil end
+
+    local current = data.assignedCharacter
+    local nextIdx = 1
+    for i, name in ipairs(list) do
+        if name == current then
+            nextIdx = (i % #list) + 1
+            break
+        end
+    end
+    ns.AssignRecipeCharacter(recipeID, list[nextIdx])
+    return list[nextIdx]
+end
+
 ----------------------------------------------------------------------
--- Fee lookup: per-recipe override wins, otherwise the global per-profession
--- rate, otherwise 0.
+-- Fee lookup
 ----------------------------------------------------------------------
 function ns.GetRecipeFee(recipeData)
     if not recipeData then return 0 end
@@ -276,4 +374,228 @@ function ns.GetRecipeFee(recipeData)
         return ns.db.settings.professionFees[recipeData.professionID] or 0
     end
     return 0
+end
+
+----------------------------------------------------------------------
+-- Bulk track helpers (used by RecipeTracker)
+----------------------------------------------------------------------
+
+--- Returns true if this recipeInfo looks concentration-gated.
+local function RecipeNeedsConcentration(recipeID)
+    if not C_TradeSkillUI or not C_TradeSkillUI.GetCraftingOperationInfo then
+        return false
+    end
+    local ok, info = pcall(C_TradeSkillUI.GetCraftingOperationInfo, recipeID, {})
+    if ok and info and info.concentrationCost and info.concentrationCost > 0 then
+        return true
+    end
+    return false
+end
+
+-- Profession-stat / non-craftable names that GetAllRecipeIDs sometimes returns.
+-- These are not useful for Trade chat matching.
+local JUNK_RECIPE_NAMES = {
+    ["concentration"] = true, ["knowledge"] = true, ["quality"] = true,
+    ["sparks"] = true, ["ingenuity"] = true, ["multicraft"] = true,
+    ["resourcefulness"] = true, ["skill"] = true, ["crafting speed"] = true,
+    ["finesse"] = true, ["perception"] = true, ["deeftness"] = true,
+    ["deftness"] = true,
+}
+
+local function IsJunkRecipeName(name)
+    if not name then return true end
+    local key = name:lower():match("^%s*(.-)%s*$")
+    return JUNK_RECIPE_NAMES[key] == true
+end
+
+----------------------------------------------------------------------
+-- Progress overlay (visual feedback instead of chat spam)
+----------------------------------------------------------------------
+local progressFrame
+
+local function EnsureProgressFrame()
+    if progressFrame then return progressFrame end
+
+    local f = CreateFrame("Frame", "CraftBellBulkProgress", UIParent, "BackdropTemplate")
+    f:SetSize(360, 78)
+    f:SetPoint("CENTER", UIParent, "CENTER", 0, 120)
+    f:SetFrameStrata("DIALOG")
+    f:SetFrameLevel(200)
+    f:SetClampedToScreen(true)
+    if ns.ApplyDarkTheme then
+        ns.ApplyDarkTheme(f)
+    else
+        f:SetBackdrop({
+            bgFile = "Interface\\Buttons\\WHITE8x8",
+            edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+            edgeSize = 16,
+            insets = { left = 4, right = 4, top = 4, bottom = 4 },
+        })
+        f:SetBackdropColor(0.08, 0.08, 0.1, 0.95)
+    end
+
+    f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    f.title:SetPoint("TOP", f, "TOP", 0, -12)
+    f.title:SetTextColor(0, 0.8, 1)
+    f.title:SetText(L["BULK_PROGRESS_TITLE"] or "CraftBell — Scanning recipes")
+
+    f.status = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    f.status:SetPoint("TOP", f.title, "BOTTOM", 0, -6)
+    f.status:SetText("")
+
+    f.barBG = f:CreateTexture(nil, "BACKGROUND")
+    f.barBG:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 16, 14)
+    f.barBG:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -16, 14)
+    f.barBG:SetHeight(14)
+    f.barBG:SetColorTexture(0.15, 0.15, 0.18, 1)
+
+    f.bar = f:CreateTexture(nil, "ARTWORK")
+    f.bar:SetPoint("TOPLEFT", f.barBG, "TOPLEFT", 0, 0)
+    f.bar:SetPoint("BOTTOMLEFT", f.barBG, "BOTTOMLEFT", 0, 0)
+    f.bar:SetWidth(1)
+    f.bar:SetColorTexture(0, 0.75, 1, 1)
+
+    f:Hide()
+    progressFrame = f
+    return f
+end
+
+local function ShowProgress(current, total, label)
+    local f = EnsureProgressFrame()
+    f:Show()
+    f:Raise()
+    local pct = (total > 0) and (current / total) or 0
+    local barWidth = math.max(1, (f.barBG:GetWidth() or 328) * pct)
+    f.bar:SetWidth(barWidth)
+    f.status:SetText(string.format("%s  %d / %d", label or "", current, total))
+end
+
+local function HideProgress(delay)
+    local f = progressFrame
+    if not f then return end
+    if delay and delay > 0 then
+        C_Timer.After(delay, function()
+            if f then f:Hide() end
+        end)
+    else
+        f:Hide()
+    end
+end
+
+--- Scan the currently open profession and track recipes for this character.
+--- Chat is not flooded: only a single summary line is printed.
+--- A center progress bar shows live status.
+--- Returns added, skipped, alreadyOwned counts.
+function ns.BulkTrackCurrentProfession(opts)
+    opts = opts or {}
+    if not C_TradeSkillUI or not C_TradeSkillUI.GetAllRecipeIDs then
+        ns.Print(L["BULK_NO_API"] or "Profession API unavailable — open a profession window first.")
+        return 0, 0, 0
+    end
+
+    local recipeIDs = C_TradeSkillUI.GetAllRecipeIDs()
+    if not recipeIDs or #recipeIDs == 0 then
+        ns.Print(L["BULK_NO_RECIPES"] or "No recipes found. Open a profession window and try again.")
+        return 0, 0, 0
+    end
+
+    local learnedOnly = opts.learnedOnly
+    if learnedOnly == nil then learnedOnly = ns.db.settings.bulkTrackLearnedOnly end
+    local skipConc = opts.skipConcentration
+    if skipConc == nil then skipConc = ns.db.settings.bulkTrackSkipConcentration end
+    local autoAssign = opts.autoAssign
+    if autoAssign == nil then autoAssign = ns.db.settings.bulkTrackAutoAssign end
+
+    local professionID, professionName, tradeSkillLink
+    do
+        local profInfo = C_TradeSkillUI.GetChildProfessionInfo and C_TradeSkillUI.GetChildProfessionInfo()
+        if profInfo then
+            professionID = profInfo.parentProfessionID or false
+            professionName = profInfo.parentProfessionName or profInfo.professionName or "Unknown"
+        end
+        if professionID and C_SpellBook and C_Spell then
+            local ok, result = pcall(function()
+                local spellSkillIndex = C_SpellBook.GetSkillLineIndexByID(professionID)
+                if not spellSkillIndex then return nil end
+                local skillLineInfo = C_SpellBook.GetSpellBookSkillLineInfo(spellSkillIndex)
+                if not skillLineInfo then return nil end
+                local _, skillSpellID = C_SpellBook.GetSpellBookItemType(
+                    skillLineInfo.itemIndexOffset + 1, Enum.SpellBookSpellBank.Player)
+                if skillSpellID then
+                    return C_Spell.GetSpellTradeSkillLink(skillSpellID)
+                end
+            end)
+            if ok then tradeSkillLink = result end
+        end
+    end
+
+    local total = #recipeIDs
+    local added, skipped, already = 0, 0, 0
+    local me = ns.GetPlayerFullName()
+    local label = professionName or "Profession"
+
+    ns.Print(string.format(L["BULK_START"] or "Scanning %s — %d recipes…", label, total))
+    ShowProgress(0, total, label)
+
+    -- Process in chunks so the progress bar can paint and the client stays responsive.
+    local index = 1
+    local CHUNK = 25
+
+    local function ProcessChunk()
+        local limit = math.min(index + CHUNK - 1, total)
+        for i = index, limit do
+            local recipeID = recipeIDs[i]
+            local info = C_TradeSkillUI.GetRecipeInfo(recipeID)
+            if not info or IsJunkRecipeName(info.name) then
+                skipped = skipped + 1
+            elseif learnedOnly and info.learned == false then
+                skipped = skipped + 1
+            else
+                local needsConc = RecipeNeedsConcentration(recipeID)
+                if skipConc and needsConc then
+                    skipped = skipped + 1
+                else
+                    local itemLink = C_TradeSkillUI.GetRecipeItemLink and C_TradeSkillUI.GetRecipeItemLink(recipeID)
+                    local ownedBefore = ns.DoesCharacterOwnRecipe(recipeID, me)
+                    ns.TrackRecipe(
+                        recipeID,
+                        info.name,
+                        professionID,
+                        professionName,
+                        itemLink,
+                        tradeSkillLink,
+                        {
+                            needsConcentration = needsConc,
+                            autoAssign = autoAssign,
+                            silent = true, -- no per-recipe chat spam
+                        }
+                    )
+                    if ownedBefore then
+                        already = already + 1
+                    else
+                        added = added + 1
+                    end
+                end
+            end
+        end
+
+        index = limit + 1
+        ShowProgress(math.min(index - 1, total), total, label)
+
+        if index <= total then
+            C_Timer.After(0, ProcessChunk) -- yield a frame, continue
+        else
+            -- Done
+            ShowProgress(total, total, label)
+            ns.Print(string.format(
+                L["BULK_TRACK_SUMMARY"] or "Bulk track: +%d new, %d already owned, %d skipped (%s)",
+                added, already, skipped, label
+            ))
+            ns.FireCallback("BULK_TRACK_DONE", added, already, skipped)
+            HideProgress(1.5)
+        end
+    end
+
+    ProcessChunk()
+    return added, already, skipped -- initial return; final counts fire via callback
 end
