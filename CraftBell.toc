@@ -1,0 +1,22 @@
+## Interface: 120001
+## Title: CraftBell
+## Notes: Scan trade chat for crafting requests matching your tracked recipes. Realm-aware, with per-profession pricing.
+## Author: YourNameHere
+## Version: 0.1.0
+## SavedVariables: CraftBellDB
+## IconTexture: Interface\Icons\INV_Misc_Bell_01
+## Category: Professions
+## X-Credits: Based on CraftRadar by Loune-Hyjal (continued after inactivity)
+
+Locales\enUS.lua
+Locales\frFR.lua
+Utils\Utils.lua
+Core\Database.lua
+Core\History.lua
+Core\FocusMode.lua
+Core\Init.lua
+Core\Minimap.lua
+Modules\RecipeTracker.lua
+Modules\ChatScanner.lua
+Modules\AlertFrame.lua
+Modules\MainWindow.lua

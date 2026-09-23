@@ -1,0 +1,11 @@
+# WoW SavedVariables — personal data, never commit
+WTF/
+*.lua.bak
+
+# Editor / OS cruft
+.DS_Store
+.vscode/
+*.swp
+
+# Packaged builds if you ever zip locally
+*.zip
