@@ -69,12 +69,33 @@ end
 -- DROP-IN replacement for BuildRecipeWhisper in Modules/AlertFrame.lua
 -- Uses assigned owner (multi-character) instead of the old single `character` field.
 
+--- Prefer an owner whose realm is whisper-compatible with the current client.
+local function PickCompatibleOwner(recipeData)
+    if not recipeData then return nil end
+    local owners = recipeData.owners or {}
+    local assigned = ns.GetRecipeCharacterView and ns.GetRecipeCharacterView(recipeData)
+        or recipeData.character
+    local smart = not ns.db or ns.db.settings.smartRealmCrafter ~= false
+
+    if assigned and assigned.realm and ns.IsRealmCompatible(assigned.realm) then
+        return assigned
+    end
+    if not smart then
+        return assigned
+    end
+    for _, o in pairs(owners) do
+        if o and o.realm and ns.IsRealmCompatible(o.realm) then
+            return o
+        end
+    end
+    return assigned
+end
+
 local function BuildRecipeWhisper(recipeData)
     if not recipeData then return nil, false, false end
 
     local currentPlayer = ns.GetPlayerFullName()
-    local owner = ns.GetRecipeCharacterView and ns.GetRecipeCharacterView(recipeData)
-        or (recipeData.character)
+    local owner = PickCompatibleOwner(recipeData)
     local recipeOwner = (owner and owner.fullName) or currentPlayer
     local isCrossChar = recipeOwner ~= currentPlayer
 
@@ -83,7 +104,8 @@ local function BuildRecipeWhisper(recipeData)
     if owner and owner.realm then
         if not ns.IsRealmCompatible(owner.realm) then
             isMismatched = true
-            isBlocked = (ns.db.settings.realmMismatchMode == "block")
+            isBlocked = (ns.db.settings.blockIncompatibleRealmAlerts == true)
+                or (ns.db.settings.realmMismatchMode == "block")
         end
     end
 
@@ -112,11 +134,13 @@ end
 ----------------------------------------------------------------------
 -- Toast + expanded panel
 ----------------------------------------------------------------------
-local toastFrame, toastSenderText, toastRecipeText
+local toastFrame, toastSenderText, toastRecipeText, toastIcon
 local expandedFrame, expandedSender, expandedMessage, expandedRecipe
 local expandedWhisperPreview, expandedWhisperBtn, expandedRealmNote
 local currentSender, currentWhisperMessage, currentHistoryEntry, currentFirstRecipeID
 local autoHideTimer
+local toastEditMode = false
+local editOverlayFrame = nil
 
 local TOAST_PRESETS = {
     small  = { width = 300, height = 40, iconSize = 20, font1 = "GameFontHighlightSmall", font2 = "GameFontNormalSmall" },
@@ -134,11 +158,21 @@ local function CancelAutoHide()
 end
 
 local function StartAutoHide()
+    if toastEditMode then return end
     CancelAutoHide()
     autoHideTimer = C_Timer.NewTimer(AUTO_HIDE_DELAY, function()
         if toastFrame and toastFrame:IsShown() then toastFrame:Hide() end
         if expandedFrame and expandedFrame:IsShown() then expandedFrame:Hide() end
     end)
+end
+
+local function SaveToastPosition()
+    if not toastFrame or not ns.db then return end
+    local pt, _, relPt, ox, oy = toastFrame:GetPoint()
+    ns.db.settings.toastPoint = pt
+    ns.db.settings.toastRelPoint = relPt
+    ns.db.settings.toastOffsetX = ox
+    ns.db.settings.toastOffsetY = oy
 end
 
 local function CreateExpandedFrame()
@@ -259,12 +293,21 @@ local function CreateToastFrame()
     local offY = (ns.db and ns.db.settings.toastOffsetY) or -120
     toastFrame:SetPoint(point, UIParent, relPoint, offX, offY)
 
+    toastFrame:SetMovable(true)
+    toastFrame:EnableMouse(true)
+    toastFrame:RegisterForDrag("RightButton")
+    toastFrame:SetScript("OnDragStart", toastFrame.StartMoving)
+    toastFrame:SetScript("OnDragStop", function(self)
+        self:StopMovingOrSizing()
+        if toastEditMode then SaveToastPosition() end
+    end)
+
     toastFrame:SetFrameStrata("DIALOG")
     toastFrame:SetFrameLevel(101)
     toastFrame:SetClampedToScreen(true)
     ns.ApplyDarkTheme(toastFrame)
 
-    local toastIcon = toastFrame:CreateTexture(nil, "ARTWORK")
+    toastIcon = toastFrame:CreateTexture(nil, "ARTWORK")
     toastIcon:SetSize(preset.iconSize, preset.iconSize)
     toastIcon:SetPoint("LEFT", toastFrame, "LEFT", 14, 0)
     toastIcon:SetTexture("Interface\\Icons\\INV_Inscription_Tradeskill01")
@@ -287,6 +330,7 @@ local function CreateToastFrame()
     hoverTex:SetColorTexture(0, 0.8, 1, 0.06)
 
     toastFrame:SetScript("OnEnter", function()
+        if toastEditMode then return end
         CancelAutoHide()
         CreateExpandedFrame()
         expandedFrame:ClearAllPoints()
@@ -294,6 +338,7 @@ local function CreateToastFrame()
         expandedFrame:Show()
     end)
     toastFrame:SetScript("OnLeave", function()
+        if toastEditMode then return end
         C_Timer.After(0.15, function()
             if expandedFrame and expandedFrame:IsShown() then
                 if not toastFrame:IsMouseOver() and not expandedFrame:IsMouseOver() then
@@ -306,8 +351,8 @@ local function CreateToastFrame()
         end)
     end)
 
-    toastFrame:EnableMouse(true)
     toastFrame:SetScript("OnMouseUp", function(self, button)
+        if toastEditMode then return end
         if button == "LeftButton" then
             if currentSender and currentWhisperMessage and currentWhisperMessage ~= "" then
                 SendWhisper(currentWhisperMessage, currentSender)
@@ -331,6 +376,89 @@ local function CreateToastFrame()
 end
 
 ----------------------------------------------------------------------
+-- Toast size + edit mode
+----------------------------------------------------------------------
+function ns.ApplyToastSize(presetKey)
+    local p = TOAST_PRESETS[presetKey]
+    if not p then return end
+    if ns.db then ns.db.settings.toastSize = presetKey end
+    CreateToastFrame()
+    toastFrame:SetSize(p.width, p.height)
+    if toastIcon then toastIcon:SetSize(p.iconSize, p.iconSize) end
+    if toastSenderText then toastSenderText:SetFontObject(p.font1) end
+    if toastRecipeText then toastRecipeText:SetFontObject(p.font2) end
+end
+
+function ns.ToggleToastEditMode()
+    CreateToastFrame()
+
+    if toastEditMode then
+        toastEditMode = false
+        if editOverlayFrame then editOverlayFrame:Hide() end
+        toastFrame:RegisterForDrag("RightButton")
+        toastFrame:SetScript("OnDragStop", function(self)
+            self:StopMovingOrSizing()
+        end)
+        toastFrame:Hide()
+        return
+    end
+
+    toastEditMode = true
+    CancelAutoHide()
+    if expandedFrame then expandedFrame:Hide() end
+
+    toastFrame:RegisterForDrag("LeftButton")
+    toastFrame:SetScript("OnDragStop", function(self)
+        self:StopMovingOrSizing()
+        SaveToastPosition()
+    end)
+
+    toastSenderText:SetText((L["TOAST_FROM"] or "From: ") .. "PlayerName-Realm")
+    toastRecipeText:SetText("[" .. (L["TOAST_EDIT_MODE"] or "Configure popup") .. "]")
+    toastFrame:Show()
+    toastFrame:SetAlpha(1)
+    toastFrame:Raise()
+
+    if not editOverlayFrame then
+        editOverlayFrame = CreateFrame("Frame", nil, toastFrame, "BackdropTemplate")
+        editOverlayFrame:SetSize(300, 56)
+        editOverlayFrame:SetPoint("TOP", toastFrame, "BOTTOM", 0, -8)
+        editOverlayFrame:SetFrameStrata("DIALOG")
+        editOverlayFrame:SetFrameLevel(102)
+        ns.ApplyDarkTheme(editOverlayFrame)
+
+        editOverlayFrame.hint = editOverlayFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        editOverlayFrame.hint:SetPoint("TOP", editOverlayFrame, "TOP", 0, -8)
+
+        editOverlayFrame.saveBtn = ns.CreateUIButton and ns.CreateUIButton(editOverlayFrame, {
+            width = 120, height = 24, text = L["TOAST_EDIT_SAVE"] or "Save", variant = "primary",
+        }) or CreateFrame("Button", nil, editOverlayFrame, "UIPanelButtonTemplate")
+        editOverlayFrame.saveBtn:SetPoint("BOTTOM", editOverlayFrame, "BOTTOM", 0, 8)
+        if not ns.CreateUIButton then
+            editOverlayFrame.saveBtn:SetSize(120, 24)
+            editOverlayFrame.saveBtn:SetText(L["TOAST_EDIT_SAVE"] or "Save")
+        end
+        editOverlayFrame.saveBtn:SetScript("OnClick", function()
+            SaveToastPosition()
+            ns.Print(L["TOAST_POSITION_SAVED"] or "Popup position saved.")
+            toastEditMode = false
+            editOverlayFrame:Hide()
+            toastFrame:RegisterForDrag("RightButton")
+            toastFrame:SetScript("OnDragStop", function(self)
+                self:StopMovingOrSizing()
+            end)
+            toastFrame:Hide()
+        end)
+    end
+
+    editOverlayFrame.hint:SetText("|cff00ccff" .. (L["TOAST_EDIT_HINT"] or "Drag the popup, then click Save") .. "|r")
+    if editOverlayFrame.saveBtn.SetText then
+        editOverlayFrame.saveBtn:SetText(L["TOAST_EDIT_SAVE"] or "Save")
+    end
+    editOverlayFrame:Show()
+end
+
+----------------------------------------------------------------------
 -- Show an alert for a recipe match
 ----------------------------------------------------------------------
 function ns.ShowAlert(sender, message, matches)
@@ -339,6 +467,51 @@ function ns.ShowAlert(sender, message, matches)
         for _, data in pairs(matches) do table.insert(names, data.itemLink or data.recipeName) end
         ns.AddToHistory(sender, message, matches, table.concat(names, ", "))
         return
+    end
+
+    -- Optional: skip if no crafter is realm-compatible with this client
+    if ns.db and ns.db.settings.blockIncompatibleRealmAlerts and matches then
+        local anyOk = false
+        for _, data in pairs(matches) do
+            local owners = data.owners or {}
+            local hasOwner = false
+            for _, o in pairs(owners) do
+                hasOwner = true
+                if o.realm and ns.IsRealmCompatible(o.realm) then
+                    anyOk = true
+                    break
+                end
+            end
+            if not hasOwner then
+                -- no owner map: treat as ok for this character
+                anyOk = true
+            end
+            if anyOk then break end
+        end
+        if not anyOk then
+            ns.Debug("ShowAlert: blocked — no realm-compatible crafter")
+            return
+        end
+    end
+
+    -- Optional: only alert when the logged-in character is the crafter
+    if ns.db and ns.db.settings.alertsCurrentCharOnly and matches then
+        local me = ns.GetPlayerFullName and ns.GetPlayerFullName()
+        local filtered = {}
+        for recipeID, data in pairs(matches) do
+            local assigned = data.assignedCharacter
+            local isMe = assigned and me and assigned == me
+            if not isMe and ns.DoesCharacterOwnRecipe then
+                isMe = ns.DoesCharacterOwnRecipe(recipeID, me)
+            end
+            if isMe then
+                filtered[recipeID] = data
+            end
+        end
+        if not next(filtered) then
+            return
+        end
+        matches = filtered
     end
 
     CreateToastFrame()
@@ -372,9 +545,12 @@ function ns.ShowAlert(sender, message, matches)
     currentWhisperMessage = whisperMsg
 
     if isMismatched then
+        local ownerView = ns.GetRecipeCharacterView and ns.GetRecipeCharacterView(firstRecipeData)
+            or firstRecipeData.character
+        local realmName = (ownerView and ownerView.realm) or "?"
         local realmText = string.format(
             L["REALM_MISMATCH_NOTE"] or "Crafter is on %s — may not be whisperable from here.",
-            firstRecipeData.character.realm)
+            realmName)
         expandedRealmNote:SetText(realmText)
         expandedRealmNote:Show()
         if isBlocked then

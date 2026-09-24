@@ -139,9 +139,13 @@ local function ScanMessage(message, sender, event)
         return true
     end
 
-    -- Fallback: plain-text name matching
+    -- Fallback: plain-text name matching (whole-word when enabled)
+    local useWholeWord = not ns.db.settings or ns.db.settings.recipeWholeWord ~= false
     for recipeName, recipeID in pairs(lookupCache) do
-        if string.find(normalizedMsg, recipeName, 1, true) then
+        local found = useWholeWord
+            and FindWholeWord(normalizedMsg, recipeName)
+            or string.find(normalizedMsg, recipeName, 1, true)
+        if found then
             local spamKey = sender .. ":" .. recipeID
             local now = GetTime()
             if not recentAlerts[spamKey] or (now - recentAlerts[spamKey]) > COOLDOWN then
@@ -233,8 +237,49 @@ end
 ----------------------------------------------------------------------
 local scanFrame = CreateFrame("Frame")
 
-local function OnChatEvent(self, event, message, sender)
+--- Map CHAT_MSG_* / channel base name → settings.chatChannels key
+local function ChannelAllowed(event, channelBaseName)
+    local ch = ns.db and ns.db.settings and ns.db.settings.chatChannels
+    if not ch then
+        -- defaults if missing
+        ch = { trade = true, services = true, say = true, yell = true }
+    end
+    if event == "CHAT_MSG_SAY" then return ch.say ~= false end
+    if event == "CHAT_MSG_YELL" then return ch.yell ~= false end
+    if event == "CHAT_MSG_GUILD" or event == "CHAT_MSG_OFFICER" then return ch.guild end
+    if event == "CHAT_MSG_PARTY" or event == "CHAT_MSG_PARTY_LEADER" then return ch.party end
+    if event == "CHAT_MSG_RAID" or event == "CHAT_MSG_RAID_LEADER" or event == "CHAT_MSG_RAID_WARNING" then
+        return ch.raid
+    end
+    if event == "CHAT_MSG_INSTANCE_CHAT" or event == "CHAT_MSG_INSTANCE_CHAT_LEADER" then
+        return ch.instance
+    end
+    if event == "CHAT_MSG_CHANNEL" then
+        local name = (channelBaseName or ""):lower()
+        -- strip "1. " style prefixes sometimes present
+        name = name:gsub("^%d+%.%s*", "")
+        if name:find("trade", 1, true) then return ch.trade ~= false end
+        if name:find("services", 1, true) or name:find("service", 1, true) then
+            return ch.services ~= false
+        end
+        if name:find("general", 1, true) then return ch.general end
+        if name:find("lookingforgroup", 1, true) or name:find("looking for group", 1, true)
+            or name == "lfg" then
+            return ch.lookingforgroup
+        end
+        -- unknown channel: ignore by default
+        return false
+    end
+    return false
+end
+
+local function OnChatEvent(self, event, message, sender, ...)
     if ns.db and ns.db.settings.dndEnabled then return end
+    -- ... = languageName, channelName, playerName2, specialFlags, zoneChannelID, channelIndex, channelBaseName
+    local _, channelName, _, _, _, _, channelBase = ...
+    if not ChannelAllowed(event, channelBase or channelName) then
+        return
+    end
     if not ScanMessage(message, sender, event) then
         ScanKeywords(message, sender, event)
     end
@@ -243,7 +288,27 @@ end
 local function StartScanning()
     if not ns.db then return end
     scanFrame:UnregisterAllEvents()
+    local ch = ns.db.settings.chatChannels or {}
     scanFrame:RegisterEvent("CHAT_MSG_CHANNEL")
+    if ch.say ~= false then scanFrame:RegisterEvent("CHAT_MSG_SAY") end
+    if ch.yell ~= false then scanFrame:RegisterEvent("CHAT_MSG_YELL") end
+    if ch.guild then
+        scanFrame:RegisterEvent("CHAT_MSG_GUILD")
+        scanFrame:RegisterEvent("CHAT_MSG_OFFICER")
+    end
+    if ch.party then
+        scanFrame:RegisterEvent("CHAT_MSG_PARTY")
+        scanFrame:RegisterEvent("CHAT_MSG_PARTY_LEADER")
+    end
+    if ch.raid then
+        scanFrame:RegisterEvent("CHAT_MSG_RAID")
+        scanFrame:RegisterEvent("CHAT_MSG_RAID_LEADER")
+        scanFrame:RegisterEvent("CHAT_MSG_RAID_WARNING")
+    end
+    if ch.instance then
+        scanFrame:RegisterEvent("CHAT_MSG_INSTANCE_CHAT")
+        scanFrame:RegisterEvent("CHAT_MSG_INSTANCE_CHAT_LEADER")
+    end
     scanFrame:SetScript("OnEvent", OnChatEvent)
     ns.Debug("ChatScanner: scanning started")
 end
