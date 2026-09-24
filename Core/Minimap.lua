@@ -19,7 +19,7 @@ local function CreateMinimapButton()
     local icon = btn:CreateTexture(nil, "ARTWORK")
     icon:SetSize(18, 18)
     icon:SetPoint("CENTER")
-    icon:SetTexture("Interface\\Icons\\INV_Misc_Bell_01")
+    icon:SetTexture("Interface\\Icons\\Inv_11_0_arathordungeon_bell_color4")
     icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 
     local overlay = btn:CreateTexture(nil, "OVERLAY")
