@@ -1,44 +1,42 @@
 # TODO
 
 ## Blocking
-- [ ] Hear back from Loune-Hyjal (comment sent on CurseForge) — decides
-      whether this stays a personal fork, becomes a PR upstream, or gets
-      published openly with credit.
+- [ ] Hear back from Loune-Hyjal (CurseForge) — personal fork vs PR vs public release with credit.
+- [ ] LICENSE (MIT recommended) once release path is clear.
+- [ ] Set real Author handle in `CraftBell.toc`.
 
-## Core feature work
-- [ ] Port `RecipeTracker.lua`
-  - [ ] Pass `professionID` (`profInfo.parentProfessionID`) through to
-        `ns.TrackRecipe` — currently discarded after deriving the display
-        name in the original.
-- [ ] Port `ChatScanner.lua`
-  - [ ] Logic is mostly unaffected by the new struct; mainly needs the
-        `data.characterName` references updated to `data.character.fullName`.
-- [ ] Port `AlertFrame.lua`
-  - [ ] Add `{fee}` placeholder, resolved via `ns.GetRecipeFee(recipeData)`,
-        to both `messageTemplate` and `crossCharTemplate` substitution sites.
-  - [ ] Add realm-mismatch handling: check `ns.IsRealmCompatible(recipeOwner_realm)`
-        before showing the whisper button; respect
-        `settings.realmMismatchMode` ("warn" vs "block").
-  - [ ] Decide UI treatment for "warn" mode — icon/tooltip vs inline text.
-- [ ] Port `MainWindow.lua`
-  - [ ] New settings section: per-profession fee table editor
-        (`settings.professionFees`).
-  - [ ] Surface `character.realm` somewhere in the recipe list (currently
-        only `character.fullName` shown via debug dump).
-- [ ] Port `RelaySystem.lua` (lower priority — only matters if using
-      cross-character relay)
+## Done in 0.1.1
+- [x] Persisted history queue (account SV)
+- [x] Whisper / Ready / Reject / Skip actions
+- [x] Light stats: completed / rejected / skipped (+ by profession)
+- [x] Ready/mailed notify template
+- [x] Toast click-to-whisper setting
+- [x] Whisper length / hyperlink send fix
+- [x] Compact fee format (`2k` / `2m`, no `g`)
+- [x] Alert Whisper button matches UI kit
 
-## Data / migration
-- [ ] Decide: does `MigrateRecipeEntry` need to also backfill `professionID`
-      for old entries that only have `professionName`? Currently just marks
-      it `false` (unknown) — those old recipes won't get a fee until
-      re-tracked. Acceptable for a personal fork; would need addressing
-      before any public release.
-- [ ] Test the `CraftRadarDB` → `CraftBellDB` import path against your real
-      SavedVariables file, not just a fresh install.
+## Done in 0.1.0
+- [x] Multi-owner schema + CraftRadarDB import
+- [x] RecipeTracker (Track + Track All dialog)
+- [x] ChatScanner (channels, whole-word, assigned-owner mute keys)
+- [x] AlertFrame (`{fee}`, realm mismatch, smart crafter)
+- [x] Main window + Recipes / Settings / History / Keywords tabs
+- [x] Per-profession and per-recipe fees
+- [x] Locales enUS / frFR / esES
+- [x] `.gitignore`, luacheck, CI, issue/PR templates
 
-## Polish / hygiene
-- [ ] Fill in real locale strings in `Locales/enUS.lua` / `frFR.lua` as each
-      module gets ported — don't bulk-copy the original's ~150-string file.
-- [ ] Add a `.gitignore` (WoW SavedVariables, `.DS_Store`, editor cruft).
-- [ ] Decide on a LICENSE once the author-contact question above resolves.
+## Later (if demand)
+- [ ] Port RelaySystem (optional)
+- [ ] Keyword ↔ profession pairing UI
+- [ ] Category bulk-assign
+- [ ] Richer stats (customers, realm friction, close reasons)
+- [ ] History row overflow menu if four buttons feel tight
+- [ ] Backfill `professionID` on old imports
+- [ ] Test import against a real `CraftRadarDB` file
+
+## Release QA
+- [ ] `/reload` + character switch keeps history
+- [ ] Whisper offer + Ready notify from crafter alt
+- [ ] Reject / Skip update stats
+- [ ] Long template whisper (item links) still sends
+- [ ] Toast click-to-whisper on/off in Settings

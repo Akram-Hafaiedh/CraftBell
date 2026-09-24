@@ -213,7 +213,7 @@ local function BuildRecipeWhisper(recipeData)
     end
 
     -- Prefer links in the template; SendWhisper falls back to plain text if over 255 bytes.
-    -- Fee as plain "8,000g" so color codes never inflate length or break chat.
+    -- Fee as plain compact units (2k / 2m) — no "g", no color codes.
     local whisperMsg = ns.FormatTemplate(template, {
         profession = recipeData.tradeSkillLink or recipeData.professionName or "Artisan",
         item = recipeData.itemLink or recipeData.recipeName,
@@ -362,7 +362,9 @@ local function CreateExpandedFrame()
             local ok = SendWhisper(currentWhisperMessage, currentSender)
             if ok then
                 ns.Print((L["MESSAGE_SENT_TO"] or "Message sent to ") .. currentSender)
-                if currentHistoryEntry then
+                if currentHistoryEntry and ns.HistoryMarkContacted then
+                    ns.HistoryMarkContacted(currentHistoryEntry)
+                elseif currentHistoryEntry then
                     currentHistoryEntry.replied = true
                     ns.FireCallback("HISTORY_UPDATED")
                 end
@@ -732,7 +734,9 @@ function ns.ShowKeywordAlert(sender, message, kwMatches)
             local ok = SendWhisper(kwWhisper, currentSender)
             if ok then
                 ns.Print((L["MESSAGE_SENT_TO"] or "Message sent to ") .. currentSender)
-                if currentHistoryEntry then
+                if currentHistoryEntry and ns.HistoryMarkContacted then
+                    ns.HistoryMarkContacted(currentHistoryEntry)
+                elseif currentHistoryEntry then
                     currentHistoryEntry.replied = true
                     ns.FireCallback("HISTORY_UPDATED")
                 end
@@ -758,7 +762,7 @@ function ns.ShowKeywordAlert(sender, message, kwMatches)
 end
 
 ----------------------------------------------------------------------
--- Re-send from history (e.g. a "Whisper" button in the future history list)
+-- History actions: offer whisper, ready/mail notify
 ----------------------------------------------------------------------
 function ns.WhisperFromHistory(entry)
     if not entry then return end
@@ -769,8 +773,7 @@ function ns.WhisperFromHistory(entry)
             local ok = SendWhisper(kwWhisper, entry.sender)
             if ok then
                 ns.Print((L["MESSAGE_SENT_TO"] or "Message sent to ") .. entry.sender)
-                entry.replied = true
-                ns.FireCallback("HISTORY_UPDATED")
+                if ns.HistoryMarkContacted then ns.HistoryMarkContacted(entry) end
             else
                 ns.Print(L["WHISPER_FAILED"] or "Whisper failed — check target name/realm or message length.")
             end
@@ -786,16 +789,45 @@ function ns.WhisperFromHistory(entry)
 
     local ok = SendWhisper(whisperMsg, entry.sender)
     if ok then
-        entry.replied = true
         ns.Print((L["MESSAGE_SENT_TO"] or "Message sent to ") .. entry.sender)
-        ns.FireCallback("HISTORY_UPDATED")
+        if ns.HistoryMarkContacted then ns.HistoryMarkContacted(entry) end
     else
         ns.Print(L["WHISPER_FAILED"] or "Whisper failed — check target name/realm or message length.")
     end
 end
 
-----------------------------------------------------------------------
--- Wire up to the event bus
-----------------------------------------------------------------------
-ns.RegisterCallback("ALERT_FIRED", ns.ShowAlert)
-ns.RegisterCallback("KEYWORD_ALERT_FIRED", ns.ShowKeywordAlert)
+--- "Ready / mailed" notify from the current character (usually the crafter).
+function ns.NotifyFromHistory(entry)
+    if not entry then return end
+
+    local template = (ns.db and ns.db.notifyTemplate and ns.db.notifyTemplate ~= "" and ns.db.notifyTemplate)
+        or (L["DEFAULT_NOTIFY_TEMPLATE"] or "Hi! {item} is ready — check your mailbox.")
+
+    local item = entry.recipeNames
+    local profession = entry.professionName or "Artisan"
+    if entry.matchData then
+        item = entry.matchData.itemLink or entry.matchData.recipeName or item
+        profession = entry.matchData.tradeSkillLink or entry.matchData.professionName or profession
+    end
+
+    local msg = ns.FormatTemplate(template, {
+        profession = profession,
+        item = item or "your order",
+        playerName = UnitName("player"),
+        characterName = ns.GetPlayerFullName and ns.GetPlayerFullName() or UnitName("player"),
+        fee = entry.feeOffered and ns.FormatFee(entry.feeOffered, { plain = true }) or "",
+    })
+
+    if not msg or msg == "" then
+        ns.Print(L["WHISPER_FAILED"] or "Whisper failed — empty notify template.")
+        return
+    end
+
+    local ok = SendWhisper(msg, entry.sender)
+    if ok then
+        ns.Print((L["MESSAGE_SENT_TO"] or "Message sent to ") .. entry.sender)
+        if ns.HistoryMarkDone then ns.HistoryMarkDone(entry) end
+    else
+        ns.Print(L["WHISPER_FAILED"] or "Whisper failed — check target name/realm or message length.")
+    end
+end

@@ -5,36 +5,59 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Planned
+- Cross-character RelaySystem (optional).
+- Keyword ↔ profession pairing UI.
+- Category-based bulk assign.
+
+## [0.1.1] — 2026-09-24
+
 ### Added
-- Project scaffold: `.toc`, folder structure (`Core/`, `Utils/`, `Modules/`,
-  `Locales/`), README, this changelog.
-- New `trackedRecipes` data structure: `professionID` (stable, locale-
-  independent) replaces keying anything off the display `professionName`;
-  `character` split into `{name, realm, fullName}` instead of one
-  concatenated string.
-- `settings.professionFees[professionID]` — global per-profession fee table,
-  resolved at whisper-build time rather than stored per recipe.
-- `ns.GetRecipeFee(recipeData)` — resolves fee with optional per-recipe
-  `feeOverride` taking priority over the global table.
-- `ns.ParseNameRealm` / `ns.IsRealmCompatible` in `Utils.lua` — realm-suffix
-  parsing (splits on the last hyphen, so hyphenated realm names don't break)
-  and a `GetAutoCompleteRealms()`-based compatibility check.
-- One-time import: on first load, if `CraftRadarDB` exists and this addon
-  has no tracked recipes yet, migrates them into the new structure.
-- `.luacheckrc`, GitHub Actions luacheck workflow, PR template, bug report
-  issue template.
+- **Persisted history queue** (account-wide) — survives reload and character switch.
+- History actions: **Whisper** (offer), **Ready** (mailed notify from current character),
+  **Reject** (declined), **Skip** (someone else took the order).
+- Status pipeline: New → Contacted → Done / Rejected / Skipped.
+- Light **stats**: completed / rejected / skipped totals and per-profession breakdown.
+- Configurable **Ready / mailed** whisper template (`notifyTemplate`).
+- Setting: **left-click toast to whisper** (can be disabled).
 
-### Not yet ported
-- `Modules/RecipeTracker.lua` — schematic-form track button.
-- `Modules/ChatScanner.lua` — trade chat scanning.
-- `Modules/AlertFrame.lua` — toast/whisper UI, `{fee}` template placeholder,
-  realm-mismatch warn/block behavior.
-- `Modules/MainWindow.lua` — settings UI, fee table editor.
-- `Modules/RelaySystem.lua` — cross-character relay.
-- Full locale strings (only a handful of keys stubbed in so far).
+### Fixed
+- Whispers that printed “Message sent” but never appeared in chat when the
+  template exceeded 255 bytes (full item/profession links). Long messages now
+  fall back to plain text or safe splits.
+- Whisper button in the alert panel now uses the addon UI kit (primary style).
 
-## [0.1.0] — scaffold
+### Changed
+- Fee display uses compact units without a `g` suffix (`2k`, `2.5k`, `2m`).
 
-- Initial fork of CraftRadar by Loune-Hyjal, restructured per the plan
-  above. No feature parity with the original yet — this version only boots,
-  initializes its SavedVariables, and imports old data.
+## [0.1.0] — 2026-09-24
+
+First usable release. Fork of CraftRadar (Loune-Hyjal), restructured and extended.
+
+### Added
+- Multi-owner recipe model (`owners`, `assignedCharacter`) with migration from
+  single-character CraftRadar data and one-time import from `CraftRadarDB`.
+- Per-profession fees and per-recipe fee overrides; `{fee}` in whisper templates.
+- Realm compatibility checks, smart crafter selection, optional block of
+  incompatible-realm alerts.
+- Trade-chat scanning across configurable channels (Trade, Services, Say, Yell,
+  Guild, Party, Raid, Instance, General, LFG).
+- Whole-word recipe name matching; item-link (ID) matching across languages.
+- Keyword alerts (triggers, profession–item pairs, free words).
+- Toast popup with hover details, one-click whisper, size presets, draggable
+  position (`/cb toast`).
+- Profession UI: Track button on the schematic + **Track All** dialog
+  (expansions, categories, orders-only / learned-only).
+- Main window: Recipes, Settings, History, Keywords tabs.
+- Recipes tab: search, profession/category filter, sort, multi-owner assign,
+  fee editor, clear character / profession / all.
+- Settings: sound, DND/quiet mode, channels, fees, whisper templates,
+  appearance (window size, accent, background, font), import/export.
+- Focus / quiet mode (mute game audio except alerts).
+- Minimap button; slash commands `/craftbell` and `/cb` (`/cb help`).
+- Locales: English, Français, Español.
+- Project hygiene: `.luacheckrc`, GitHub Actions luacheck, issue/PR templates.
+
+### Not included
+- Cross-character alert relay (CraftRadar RelaySystem) — deferred.
+- Keyword ↔ profession pairing UI — placeholder only.

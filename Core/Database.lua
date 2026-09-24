@@ -44,6 +44,15 @@ local defaults = {
     trackedRecipes = {},
     messageTemplate = nil,
     crossCharTemplate = nil,
+    -- Ready / mailed whisper (History → Ready)
+    notifyTemplate = nil,
+    -- Persisted alert queue (newest first)
+    history = {},
+    -- Lightweight counters: completed / rejected / skipped by profession
+    historyStats = {
+        totals = { completed = 0, rejected = 0, skipped = 0 },
+        byProfession = {},
+    },
     keywords = {
         triggers = { "LF", "WTB", "Need", "LFC", "Seek" },
         pairs = {},
@@ -247,6 +256,10 @@ local function InitializeDB()
     if not ns.db.crossCharTemplate then
         ns.db.crossCharTemplate = L["DEFAULT_CROSS_TEMPLATE"] or
             "Hi! My crafting alt {characterName} can make {item} ({profession}). Fee: {fee}. Let me know!"
+    end
+    if not ns.db.notifyTemplate or ns.db.notifyTemplate == "" then
+        ns.db.notifyTemplate = L["DEFAULT_NOTIFY_TEMPLATE"] or
+            "Hi! {item} is ready — check your mailbox."
     end
 end
 

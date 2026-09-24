@@ -242,6 +242,7 @@ local function RefreshTemplateBoxes()
     end
     templateBox:SetText(ns.db.messageTemplate or DEFAULT_SAME)
     crossTemplateBox:SetText(ns.db.crossCharTemplate or DEFAULT_CROSS)
+        -- notify box refreshed via settingsRefreshers
 end
 
 function ns.UI.SettingsTab.Init(parent)
@@ -605,11 +606,51 @@ function ns.UI.SettingsTab.Init(parent)
         ns.db.crossCharTemplate = t
     end)
 
+    local DEFAULT_NOTIFY = L["DEFAULT_NOTIFY_TEMPLATE"]
+        or "Hi! {item} is ready — check your mailbox."
+    if not ns.db.notifyTemplate or ns.db.notifyTemplate == "" then
+        ns.db.notifyTemplate = DEFAULT_NOTIFY
+    end
+
+    local notifyLabel = child:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    notifyLabel:SetPoint("TOPLEFT", crossTemplateBox, "BOTTOMLEFT", 0, -14)
+    notifyLabel:SetTextColor(unpack(C.text))
+    notifyLabel:SetText(L["SETTING_NOTIFY_TEMPLATE"] or "Ready / mailed (History → Ready)")
+
+    local notifyBox = ns.CreateUIEditBox and ns.CreateUIEditBox(child, {
+        name = "CraftBellNotifyTemplate", height = 28, maxLetters = 255,
+    }) or CreateFrame("EditBox", "CraftBellNotifyTemplate", child, "InputBoxTemplate")
+    notifyBox:SetHeight(28)
+    notifyBox:SetAutoFocus(false)
+    notifyBox:SetPoint("TOPLEFT", notifyLabel, "BOTTOMLEFT", 0, -6)
+    notifyBox:SetPoint("RIGHT", child, "RIGHT", -8, 0)
+    notifyBox:SetWidth(480)
+    notifyBox:SetText(ns.db.notifyTemplate or DEFAULT_NOTIFY)
+    notifyBox:SetScript("OnEnterPressed", function(self)
+        local t = self:GetText()
+        if t == "" then t = DEFAULT_NOTIFY end
+        ns.db.notifyTemplate = t
+        self:SetText(t)
+        self:ClearFocus()
+        ns.Print(L["TEMPLATE_SAVED"] or "Whisper template saved.")
+    end)
+    notifyBox:SetScript("OnEditFocusLost", function(self)
+        if not ns.db then return end
+        local t = self:GetText()
+        if t == "" then t = DEFAULT_NOTIFY; self:SetText(t) end
+        ns.db.notifyTemplate = t
+    end)
+    table.insert(settingsRefreshers, function()
+        if ns.db then
+            notifyBox:SetText(ns.db.notifyTemplate or DEFAULT_NOTIFY)
+        end
+    end)
+
     ----------------------------------------------------------------------
     -- Appearance (window size, color scheme, font)
     ----------------------------------------------------------------------
     local appearHeader = child:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    appearHeader:SetPoint("TOPLEFT", crossTemplateBox, "BOTTOMLEFT", 0, -28)
+    appearHeader:SetPoint("TOPLEFT", notifyBox, "BOTTOMLEFT", 0, -28)
     appearHeader:SetTextColor(unpack(C.accent))
     appearHeader:SetText(string.upper(L["SECTION_APPEARANCE"] or "Appearance"))
 
