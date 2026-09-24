@@ -87,6 +87,8 @@ local defaults = {
         toastOffsetX = -350,
         toastOffsetY = -120,
         toastSize = "medium",
+        -- Left-click the compact toast to send the whisper immediately
+        toastClickWhispers = true,
         professionFees = {},
         realmMismatchMode = "warn",
         -- Matching

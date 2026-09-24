@@ -141,6 +141,8 @@ L["TOAST_SIZE_LARGE"] = "Large"
 L["TOAST_EDIT_MODE"] = "Configure popup"
 L["TOAST_EDIT_HINT"] = "Drag the popup, then click Save"
 L["TOAST_EDIT_SAVE"] = "Save"
+L["SETTING_TOAST_CLICK_WHISPER"] = "Left-click toast to whisper (and dismiss)"
+L["WHISPER_FAILED"] = "Whisper failed — check target name/realm or message length."
 L["TOAST_POSITION_SAVED"] = "Popup position saved."
 
 L["SECTION_LANGUAGE"] = "Language"

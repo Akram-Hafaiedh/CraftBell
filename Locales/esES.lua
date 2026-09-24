@@ -135,6 +135,8 @@ L["TOAST_SIZE_LARGE"] = "Grande"
 L["TOAST_EDIT_MODE"] = "Configurar ventana"
 L["TOAST_EDIT_HINT"] = "Arrastra la ventana y luego pulsa Guardar"
 L["TOAST_EDIT_SAVE"] = "Guardar"
+L["SETTING_TOAST_CLICK_WHISPER"] = "Clic izquierdo en la alerta para susurrar (y cerrar)"
+L["WHISPER_FAILED"] = "Error al susurrar — comprueba nombre/reino o la longitud del mensaje."
 L["TOAST_POSITION_SAVED"] = "Posición de la ventana guardada."
 
 L["SECTION_LANGUAGE"] = "Idioma"

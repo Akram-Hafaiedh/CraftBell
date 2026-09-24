@@ -1,7 +1,7 @@
 ## Interface: 120001
 ## Title: CraftBell
 ## Notes: Scan trade chat for crafting requests matching your tracked recipes. Realm-aware, with per-profession pricing.
-## Author: YourNameHere
+## Author: Akram-Hafaiedh (Mugiwarabøy)
 ## Version: 0.1.0
 ## SavedVariables: CraftBellDB
 ## IconTexture: Interface\Icons\Inv_11_0_arathordungeon_bell_color4

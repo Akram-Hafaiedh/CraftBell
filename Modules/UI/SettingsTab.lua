@@ -388,9 +388,32 @@ function ns.UI.SettingsTab.Init(parent)
         end
     end)
 
+    -- Click-to-whisper on the compact toast bar (anchored under Configure popup)
+    local toastClickToggle
+    if ns.CreateUIToggle then
+        toastClickToggle = ns.CreateUIToggle(child, {
+            label = L["SETTING_TOAST_CLICK_WHISPER"] or "Left-click toast to whisper (and dismiss)",
+            labelOnRight = true,
+            checked = true,
+            onChange = function(on)
+                if ns.db then ns.db.settings.toastClickWhispers = on and true or false end
+            end,
+        })
+        toastClickToggle:SetPoint("TOPLEFT", toastEditBtn, "BOTTOMLEFT", 0, -10)
+        table.insert(settingsRefreshers, function()
+            if ns.db and toastClickToggle.SetChecked then
+                toastClickToggle:SetChecked(ns.db.settings.toastClickWhispers ~= false, true)
+            end
+        end)
+    else
+        CreateCheckbox(child, L["SETTING_TOAST_CLICK_WHISPER"] or "Left-click toast to whisper (and dismiss)", -450,
+            function() return ns.db.settings.toastClickWhispers ~= false end,
+            function(v) ns.db.settings.toastClickWhispers = v end)
+    end
+
     -- Alert sound (lives with the popup section)
     local soundLabel = child:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    soundLabel:SetPoint("TOPLEFT", 4, -456)
+    soundLabel:SetPoint("TOPLEFT", 4, -500)
     soundLabel:SetTextColor(unpack(C.textMuted))
     soundLabel:SetText(L["SECTION_SOUND"] or "Alert sound")
 
@@ -413,7 +436,7 @@ function ns.UI.SettingsTab.Init(parent)
         end,
     })
     if soundDD then
-        soundDD:SetPoint("TOPLEFT", 4, -478)
+        soundDD:SetPoint("TOPLEFT", 4, -522)
         soundDD:SetOptions(SOUNDS)
         table.insert(settingsRefreshers, function()
             if ns.db and soundDD.SetValue then
@@ -422,15 +445,15 @@ function ns.UI.SettingsTab.Init(parent)
         end)
     end
 
-    Header(L["SECTION_REALM"] or "Realm compatibility", -520)
-    CreateCheckbox(child, L["SETTING_BLOCK_BAD_REALM"] or "Do not alert if no crafter can whisper this client realm", -546,
+    Header(L["SECTION_REALM"] or "Realm compatibility", -560)
+    CreateCheckbox(child, L["SETTING_BLOCK_BAD_REALM"] or "Do not alert if no crafter can whisper this client realm", -586,
         function() return ns.db.settings.blockIncompatibleRealmAlerts end,
         function(v) ns.db.settings.blockIncompatibleRealmAlerts = v end)
-    CreateCheckbox(child, L["SETTING_SMART_REALM"] or "Smart crafter: use a realm-compatible owner when assigned cannot", -572,
+    CreateCheckbox(child, L["SETTING_SMART_REALM"] or "Smart crafter: use a realm-compatible owner when assigned cannot", -612,
         function() return ns.db.settings.smartRealmCrafter ~= false end,
         function(v) ns.db.settings.smartRealmCrafter = v end)
     local realmHint = child:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    realmHint:SetPoint("TOPLEFT", 4, -598)
+    realmHint:SetPoint("TOPLEFT", 4, -638)
     realmHint:SetPoint("RIGHT", child, "RIGHT", -8, 0)
     realmHint:SetJustifyH("LEFT")
     realmHint:SetWordWrap(true)
@@ -440,7 +463,7 @@ function ns.UI.SettingsTab.Init(parent)
     ----------------------------------------------------------------------
     -- Chat channels
     ----------------------------------------------------------------------
-    Header(L["SECTION_CHANNELS"] or "Chat channels", -640)
+    Header(L["SECTION_CHANNELS"] or "Chat channels", -680)
     local CHANNEL_OPTS = {
         { key = "trade", label = L["CH_TRADE"] or "Trade" },
         { key = "services", label = L["CH_SERVICES"] or "Services" },
@@ -453,7 +476,7 @@ function ns.UI.SettingsTab.Init(parent)
         { key = "raid", label = L["CH_RAID"] or "Raid" },
         { key = "instance", label = L["CH_INSTANCE"] or "Instance" },
     }
-    local chY = -666
+    local chY = -706
     for _, opt in ipairs(CHANNEL_OPTS) do
         local key = opt.key
         CreateCheckbox(child, opt.label, chY,

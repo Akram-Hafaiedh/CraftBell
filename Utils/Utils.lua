@@ -39,31 +39,49 @@ function ns.TableCount(t)
     return count
 end
 
--- Format a fee amount for display.
+-- Format a fee amount for display / whispers.
 -- Returns "" for 0/nil so {fee} disappears from templates that don't need it.
 --
--- opts.plain = true  → always "8,000g" (safe for chat / Print — coin textures
---                       often show as □ in the chat frame)
--- default            → gold-colored number + "g" (works in UI fontstrings
---                       and chat without broken coin icons)
+-- Compact units (no "g" — gold is the default currency in whispers):
+--   500      → "500"
+--   2000     → "2k"
+--   2500     → "2.5k"
+--   2000000  → "2m"
+--
+-- opts.plain = true  → no color codes (chat / templates)
+-- default            → gold-tinted for UI fontstrings
 function ns.FormatFee(amount, opts)
     if not amount or amount <= 0 then return "" end
     amount = math.floor(amount + 0.5)
-    local num
-    if BreakUpLargeNumbers then
-        num = BreakUpLargeNumbers(amount)
-    else
-        num = tostring(amount)
+
+    local function compact(n)
+        local abs = math.abs(n)
+        if abs >= 1000000 then
+            local v = n / 1000000
+            if math.abs(v - math.floor(v + 0.5)) < 0.05 then
+                return string.format("%dm", math.floor(v + 0.5))
+            end
+            local s = string.format("%.1f", v):gsub("0+$", ""):gsub("%.$", "")
+            return s .. "m"
+        end
+        if abs >= 1000 then
+            local v = n / 1000
+            if math.abs(v - math.floor(v + 0.5)) < 0.05 then
+                return string.format("%dk", math.floor(v + 0.5))
+            end
+            local s = string.format("%.1f", v):gsub("0+$", ""):gsub("%.$", "")
+            return s .. "k"
+        end
+        return tostring(n)
     end
-    if type(opts) == "boolean" and opts then
-        -- legacy: FormatFee(n, true) → plain
-        return num .. "g"
+
+    local num = compact(amount)
+    local plain = (type(opts) == "boolean" and opts)
+        or (type(opts) == "table" and opts.plain)
+    if plain then
+        return num
     end
-    if type(opts) == "table" and opts.plain then
-        return num .. "g"
-    end
-    -- Gold-tinted text; no coin texture (avoids □ in chat)
-    return "|cffe6c35c" .. num .. "g|r"
+    return "|cffe6c35c" .. num .. "|r"
 end
 
 -- Parse user gold input: "10000", "10k", "10K", "1.5k", "2m", optional trailing g

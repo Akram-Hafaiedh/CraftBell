@@ -29,19 +29,111 @@ local function PlayAlertSound()
 end
 
 ----------------------------------------------------------------------
--- Whisper sending (255 char limit)
+-- Whisper sending (255 byte limit per message)
+-- Full item/profession hyperlinks easily exceed 255 bytes. Splitting mid-link
+-- makes the client drop the whisper with no error — that looked like
+-- "Message sent" with nothing in chat.
 ----------------------------------------------------------------------
-local function SendWhisper(msg, target)
-    if #msg <= 255 then
+local WHISPER_MAX = 255
+
+local function ChatSend(msg, target)
+    if C_ChatInfo and C_ChatInfo.SendChatMessage then
+        C_ChatInfo.SendChatMessage(msg, "WHISPER", nil, target)
+    else
         SendChatMessage(msg, "WHISPER", nil, target)
-        return
     end
-    local splitPos = msg:sub(1, 255):match(".*()%s") or 255
-    SendChatMessage(msg:sub(1, splitPos), "WHISPER", nil, target)
-    local remainder = msg:sub(splitPos + 1)
-    if #remainder > 0 then
-        SendChatMessage(remainder, "WHISPER", nil, target)
+end
+
+--- Prefer a split at whitespace that does not land inside |H...|h...|h
+local function SafeSplitPos(msg, limit)
+    limit = math.min(limit or WHISPER_MAX, #msg)
+    local window = msg:sub(1, limit)
+    -- Walk back to a space that is outside an open hyperlink
+    local pos = window:match(".*()%s")
+    if not pos then return limit end
+    local before = msg:sub(1, pos)
+    local opens = 0
+    for _ in before:gmatch("|H") do opens = opens + 1 end
+    for _ in before:gmatch("|h") do opens = opens - 1 end
+    -- Uneven |H vs |h means we are still inside a link — search earlier spaces
+    if opens ~= 0 then
+        local search = before
+        while true do
+            local p = search:match(".*()%s")
+            if not p or p < 20 then
+                -- Fall back: strip links and send plain text instead
+                return nil
+            end
+            local b = msg:sub(1, p)
+            local o = 0
+            for _ in b:gmatch("|H") do o = o + 1 end
+            for _ in b:gmatch("|h") do o = o - 1 end
+            if o == 0 then return p end
+            search = msg:sub(1, p - 1)
+        end
     end
+    return pos
+end
+
+local function PlainForWhisper(msg)
+    -- Collapse hyperlinks to their bracket text so long templates still fit
+    msg = msg:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+    msg = msg:gsub("|H.-|[Hh](.-)|[Hh]", "%1")
+    msg = msg:gsub("|T.-|t", "")
+    return msg
+end
+
+local function SendWhisper(msg, target)
+    if not msg or msg == "" or not target or target == "" then
+        ns.Debug("SendWhisper: missing msg or target")
+        return false
+    end
+
+    -- Normalize target (trim); keep Name-Realm as provided by chat events
+    target = target:match("^%s*(.-)%s*$") or target
+
+    local function trySend(payload)
+        ns.Debug(string.format("SendWhisper: target=%s len=%d", tostring(target), #payload))
+        local ok, err = pcall(ChatSend, payload, target)
+        if not ok then
+            ns.Error("Whisper failed: " .. tostring(err))
+            return false
+        end
+        return true
+    end
+
+    if #msg <= WHISPER_MAX then
+        return trySend(msg)
+    end
+
+    -- Too long with full links: try plain-text version first (still readable)
+    local plain = PlainForWhisper(msg)
+    if #plain <= WHISPER_MAX then
+        ns.Debug("SendWhisper: using plain-text form (links stripped) len=" .. #plain)
+        return trySend(plain)
+    end
+
+    -- Still long: split safely, or split plain text
+    local splitPos = SafeSplitPos(msg, WHISPER_MAX)
+    if not splitPos then
+        splitPos = SafeSplitPos(plain, WHISPER_MAX) or WHISPER_MAX
+        msg = plain
+    end
+    local first = msg:sub(1, splitPos):match("^(.-)%s*$") or msg:sub(1, splitPos)
+    local rest = msg:sub(splitPos + 1):match("^%s*(.-)%s*$") or ""
+    local ok = trySend(first)
+    if ok and #rest > 0 then
+        if #rest > WHISPER_MAX then
+            rest = PlainForWhisper(rest)
+            if #rest > WHISPER_MAX then
+                rest = rest:sub(1, WHISPER_MAX - 3) .. "..."
+            end
+        end
+        C_Timer.After(0.15, function()
+            trySend(rest)
+        end)
+    end
+    return ok
 end
 
 local function BuildKeywordWhisper(kwMatches)
@@ -120,12 +212,14 @@ local function BuildRecipeWhisper(recipeData)
         template = ns.db.messageTemplate
     end
 
+    -- Prefer links in the template; SendWhisper falls back to plain text if over 255 bytes.
+    -- Fee as plain "8,000g" so color codes never inflate length or break chat.
     local whisperMsg = ns.FormatTemplate(template, {
         profession = recipeData.tradeSkillLink or recipeData.professionName or "Artisan",
         item = recipeData.itemLink or recipeData.recipeName,
         playerName = UnitName("player"),
         characterName = recipeOwner,
-        fee = ns.FormatFee(ns.GetRecipeFee(recipeData)),
+        fee = ns.FormatFee(ns.GetRecipeFee(recipeData), { plain = true }),
     })
 
     return whisperMsg, isMismatched, isBlocked
@@ -250,22 +344,34 @@ local function CreateExpandedFrame()
     expandedWhisperPreview:SetMaxLines(3)
     expandedWhisperPreview:SetTextColor(1, 0.5, 0.7)
 
-    expandedWhisperBtn = CreateFrame("Button", nil, expandedFrame, "UIPanelButtonTemplate")
-    expandedWhisperBtn:SetSize(140, 24)
+    if ns.CreateUIButton then
+        expandedWhisperBtn = ns.CreateUIButton(expandedFrame, {
+            width = 140, height = 28,
+            text = L["WHISPER"] or "Whisper",
+            variant = "primary",
+        })
+    else
+        expandedWhisperBtn = CreateFrame("Button", nil, expandedFrame, "UIPanelButtonTemplate")
+        expandedWhisperBtn:SetSize(140, 28)
+        expandedWhisperBtn:SetText(L["WHISPER"] or "Whisper")
+    end
     expandedWhisperBtn:SetPoint("BOTTOM", expandedFrame, "BOTTOM", 0, 14)
-    expandedWhisperBtn:SetText(L["WHISPER"] or "Whisper")
 
     expandedWhisperBtn:SetScript("OnClick", function()
-        if currentSender and currentWhisperMessage then
-            SendWhisper(currentWhisperMessage, currentSender)
-            ns.Print((L["MESSAGE_SENT_TO"] or "Message sent to ") .. currentSender)
-            if currentHistoryEntry then
-                currentHistoryEntry.replied = true
-                ns.FireCallback("HISTORY_UPDATED")
+        if currentSender and currentWhisperMessage and currentWhisperMessage ~= "" then
+            local ok = SendWhisper(currentWhisperMessage, currentSender)
+            if ok then
+                ns.Print((L["MESSAGE_SENT_TO"] or "Message sent to ") .. currentSender)
+                if currentHistoryEntry then
+                    currentHistoryEntry.replied = true
+                    ns.FireCallback("HISTORY_UPDATED")
+                end
+                expandedFrame:Hide()
+                if toastFrame then toastFrame:Hide() end
+                CancelAutoHide()
+            else
+                ns.Print(L["WHISPER_FAILED"] or "Whisper failed — check target name/realm or message length.")
             end
-            expandedFrame:Hide()
-            if toastFrame then toastFrame:Hide() end
-            CancelAutoHide()
         end
     end)
 
@@ -354,12 +460,17 @@ local function CreateToastFrame()
     toastFrame:SetScript("OnMouseUp", function(self, button)
         if toastEditMode then return end
         if button == "LeftButton" then
-            if currentSender and currentWhisperMessage and currentWhisperMessage ~= "" then
-                SendWhisper(currentWhisperMessage, currentSender)
-                ns.Print((L["MESSAGE_SENT_TO"] or "Message sent to ") .. currentSender)
-                if currentHistoryEntry then
-                    currentHistoryEntry.replied = true
-                    ns.FireCallback("HISTORY_UPDATED")
+            local clickWhisper = not ns.db or ns.db.settings.toastClickWhispers ~= false
+            if clickWhisper and currentSender and currentWhisperMessage and currentWhisperMessage ~= "" then
+                local ok = SendWhisper(currentWhisperMessage, currentSender)
+                if ok then
+                    ns.Print((L["MESSAGE_SENT_TO"] or "Message sent to ") .. currentSender)
+                    if currentHistoryEntry then
+                        currentHistoryEntry.replied = true
+                        ns.FireCallback("HISTORY_UPDATED")
+                    end
+                else
+                    ns.Print(L["WHISPER_FAILED"] or "Whisper failed — check target name/realm or message length.")
                 end
             end
             self:Hide()
@@ -618,15 +729,19 @@ function ns.ShowKeywordAlert(sender, message, kwMatches)
     expandedWhisperBtn:SetText(L["WHISPER"] or "Whisper")
     expandedWhisperBtn:SetScript("OnClick", function()
         if currentSender and kwWhisper ~= "" then
-            SendChatMessage(kwWhisper, "WHISPER", nil, currentSender)
-            ns.Print((L["MESSAGE_SENT_TO"] or "Message sent to ") .. currentSender)
-            if currentHistoryEntry then
-                currentHistoryEntry.replied = true
-                ns.FireCallback("HISTORY_UPDATED")
+            local ok = SendWhisper(kwWhisper, currentSender)
+            if ok then
+                ns.Print((L["MESSAGE_SENT_TO"] or "Message sent to ") .. currentSender)
+                if currentHistoryEntry then
+                    currentHistoryEntry.replied = true
+                    ns.FireCallback("HISTORY_UPDATED")
+                end
+                if expandedFrame then expandedFrame:Hide() end
+                if toastFrame then toastFrame:Hide() end
+                CancelAutoHide()
+            else
+                ns.Print(L["WHISPER_FAILED"] or "Whisper failed — check target name/realm or message length.")
             end
-            if expandedFrame then expandedFrame:Hide() end
-            if toastFrame then toastFrame:Hide() end
-            CancelAutoHide()
         end
     end)
 
@@ -651,11 +766,15 @@ function ns.WhisperFromHistory(entry)
     if entry.alertType == "keyword" then
         local kwWhisper = BuildKeywordWhisper(entry.keywordMatches)
         if kwWhisper ~= "" then
-            SendChatMessage(kwWhisper, "WHISPER", nil, entry.sender)
-            ns.Print((L["MESSAGE_SENT_TO"] or "Message sent to ") .. entry.sender)
+            local ok = SendWhisper(kwWhisper, entry.sender)
+            if ok then
+                ns.Print((L["MESSAGE_SENT_TO"] or "Message sent to ") .. entry.sender)
+                entry.replied = true
+                ns.FireCallback("HISTORY_UPDATED")
+            else
+                ns.Print(L["WHISPER_FAILED"] or "Whisper failed — check target name/realm or message length.")
+            end
         end
-        entry.replied = true
-        ns.FireCallback("HISTORY_UPDATED")
         return
     end
 
@@ -665,10 +784,14 @@ function ns.WhisperFromHistory(entry)
         return
     end
 
-    SendWhisper(whisperMsg, entry.sender)
-    entry.replied = true
-    ns.Print((L["MESSAGE_SENT_TO"] or "Message sent to ") .. entry.sender)
-    ns.FireCallback("HISTORY_UPDATED")
+    local ok = SendWhisper(whisperMsg, entry.sender)
+    if ok then
+        entry.replied = true
+        ns.Print((L["MESSAGE_SENT_TO"] or "Message sent to ") .. entry.sender)
+        ns.FireCallback("HISTORY_UPDATED")
+    else
+        ns.Print(L["WHISPER_FAILED"] or "Whisper failed — check target name/realm or message length.")
+    end
 end
 
 ----------------------------------------------------------------------

@@ -134,6 +134,8 @@ L["TOAST_SIZE_LARGE"] = "Grande"
 L["TOAST_EDIT_MODE"] = "Configurer la popup"
 L["TOAST_EDIT_HINT"] = "Déplace la popup, puis clique sur Enregistrer"
 L["TOAST_EDIT_SAVE"] = "Enregistrer"
+L["SETTING_TOAST_CLICK_WHISPER"] = "Clic gauche sur la popup pour chuchoter (et fermer)"
+L["WHISPER_FAILED"] = "Échec du chuchotement — vérifiez le nom/royaume ou la longueur du message."
 L["TOAST_POSITION_SAVED"] = "Position de la popup enregistrée."
 
 L["SECTION_LANGUAGE"] = "Langue"
