@@ -4,19 +4,27 @@
 ## Author: YourNameHere
 ## Version: 0.1.0
 ## SavedVariables: CraftBellDB
-## IconTexture: Interface\Icons\INV_Misc_Bell_01
+## IconTexture: Interface\Icons\Inv_11_0_arathordungeon_bell_color4
 ## Category: Professions
 ## X-Credits: Based on CraftRadar by Loune-Hyjal (continued after inactivity)
 
 Locales\enUS.lua
 Locales\frFR.lua
+Locales\esES.lua
 Utils\Utils.lua
+Utils\UITheme.lua
 Core\Database.lua
 Core\History.lua
 Core\FocusMode.lua
+Core\TextFrame.lua
 Core\Init.lua
 Core\Minimap.lua
 Modules\RecipeTracker.lua
 Modules\ChatScanner.lua
 Modules\AlertFrame.lua
+Modules\UI\_Shared.lua
+Modules\UI\RecipesTab.lua
+Modules\UI\SettingsTab.lua
+Modules\UI\HistoryTab.lua
+Modules\UI\KeywordsTab.lua
 Modules\MainWindow.lua
