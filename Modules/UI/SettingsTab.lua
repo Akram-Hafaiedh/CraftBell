@@ -608,7 +608,8 @@ function ns.UI.SettingsTab.Init(parent)
 
     local DEFAULT_NOTIFY = L["DEFAULT_NOTIFY_TEMPLATE"]
         or "Hi! {item} is ready — check your mailbox."
-    if not ns.db.notifyTemplate or ns.db.notifyTemplate == "" then
+    -- Init runs at file load (before DB_READY); never touch ns.db without a guard.
+    if ns.db and (not ns.db.notifyTemplate or ns.db.notifyTemplate == "") then
         ns.db.notifyTemplate = DEFAULT_NOTIFY
     end
 
@@ -625,8 +626,9 @@ function ns.UI.SettingsTab.Init(parent)
     notifyBox:SetPoint("TOPLEFT", notifyLabel, "BOTTOMLEFT", 0, -6)
     notifyBox:SetPoint("RIGHT", child, "RIGHT", -8, 0)
     notifyBox:SetWidth(480)
-    notifyBox:SetText(ns.db.notifyTemplate or DEFAULT_NOTIFY)
+    notifyBox:SetText((ns.db and ns.db.notifyTemplate) or DEFAULT_NOTIFY)
     notifyBox:SetScript("OnEnterPressed", function(self)
+        if not ns.db then return end
         local t = self:GetText()
         if t == "" then t = DEFAULT_NOTIFY end
         ns.db.notifyTemplate = t

@@ -3,7 +3,6 @@
 ## Blocking
 - [ ] Hear back from Loune-Hyjal (CurseForge) — personal fork vs PR vs public release with credit.
 - [ ] LICENSE (MIT recommended) once release path is clear.
-- [ ] Set real Author handle in `CraftBell.toc`.
 
 ## Done in 0.1.1
 - [x] Persisted history queue (account SV)
