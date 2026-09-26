@@ -107,16 +107,17 @@ local function UpdateDebugBtn()
     if debugBtn.SetActive then debugBtn:SetActive(on and true or false) end
 end
 debugBtn:SetScript("OnClick", function()
-    local on = not (ns.debugEnabled or (ns.db and ns.db.settings and ns.db.settings.debugEnabled))
-    ns.debugEnabled = on
-    if ns.db and ns.db.settings then ns.db.settings.debugEnabled = on end
-    UpdateDebugBtn()
-    ns.Print(on and (L["DEBUG_ON"] or "Debug mode ON — extra chat spam.")
-        or (L["DEBUG_OFF"] or "Debug mode OFF."))
+    if ns.ShowDebugWindow then
+        ns.ShowDebugWindow()
+    elseif ns.ToggleDebugWindow then
+        ns.ToggleDebugWindow(true)
+    else
+        ns.Print("Debug window not available.")
+    end
 end)
 debugBtn:SetScript("OnEnter", function(self)
     GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
-    GameTooltip:AddLine(L["BTN_DEBUG_TIP"] or "Toggle debug logging (alerts, scanner, realm checks)", 1, 1, 1, true)
+    GameTooltip:AddLine(L["BTN_DEBUG_TIP"] or "Open debug window (log, checklist, self-test)", 1, 1, 1, true)
     GameTooltip:Show()
 end)
 debugBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -138,6 +139,11 @@ testBtn:SetScript("OnClick", function()
     local fakeMessage = string.format(L["TEST_FAKE_MESSAGE"] or "LF someone to craft %s, will pay!", link)
     local sender = "TestBuyer-" .. testClickCount
     ns.Print(L["ALERT_SIMULATION"] or "Simulating an alert...")
+    if ns.DebugBeginRun then
+        ns.DebugBeginRun("live", "manual /cb test")
+        ns.DebugStep("match", true, "manual test fire")
+        ns.DebugStep("callback", true, "FireCallback(ALERT_FIRED)")
+    end
     ns.FireCallback("ALERT_FIRED", sender, fakeMessage, { [firstID] = firstData })
 end)
 testBtn:SetScript("OnEnter", function(self)

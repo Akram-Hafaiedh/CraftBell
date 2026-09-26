@@ -6,9 +6,35 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Planned
-- Cross-character RelaySystem (optional).
-- Keyword ↔ profession pairing UI.
-- Category-based bulk assign.
+
+## [0.1.3] — 2026-09-26
+
+### Added
+- **History UI overhaul**:
+  - Live **search filter** across buyer names, recipe names, and chat message text.
+  - **Status filter**: All, Open (New + Contacted), Done, Rejected, Skipped.
+  - **Multi-field sorting**: by Time (newest/oldest), Sender name, Status, or Fee.
+  - **Item icons & links**: visual recipe icons and clickable item tooltips directly on history rows.
+  - **Ping timeline**: displays first-seen vs last-seen time and repeat alert counters for persistent buyers.
+  - **Status pill badges** using new `UITheme.CreateUIBadge`.
+- **Debug subsystem & Debug window (`/cb debugwin`)**:
+  - Dedicated debug window with live pipeline checklist (validates database, cache, callbacks, realm filter, toast).
+  - Synthetic end-to-end self-test runner to verify alert delivery without trade spam.
+  - Scrollable ring-buffer log viewer with one-click copy and clear.
+- **History management commands**:
+  - `/cb history clear tests` — removes synthetic test rows (`CBSelfTest-*`, `TestBuyer*`).
+  - `/cb history clear stats` — resets completed/rejected/skipped counters.
+
+### Changed
+- **Recipe Tracker**:
+  - Filter out non-craftable informational categories (appendix, glossary, terms, stats, lore) during bulk track.
+  - Cached category lookups during bulk scans to improve scan performance and eliminate frame drops.
+- **Localization**:
+  - Updated and synced translations across English (`enUS`), Spanish (`esES`), and French (`frFR`).
+
+## [0.1.2] — 2026-09-25
+
+- fixed a problem making the 'AlertFrame' Not to trigger when a new alert is fired.
 
 ## [0.1.1] — 2026-09-24
 

@@ -135,6 +135,11 @@ local function ScanMessage(message, sender, event)
     end
 
     if matchCount > 0 then
+        if ns.DebugBeginRun then
+            ns.DebugBeginRun("live", "ID match from " .. tostring(sender))
+            ns.DebugStep("match", true, matchCount .. " recipe(s) via item link")
+            ns.DebugStep("callback", true, "FireCallback(ALERT_FIRED)")
+        end
         ns.FireCallback("ALERT_FIRED", sender, message, matches)
         return true
     end
@@ -157,6 +162,11 @@ local function ScanMessage(message, sender, event)
     end
 
     if matchCount > 0 then
+        if ns.DebugBeginRun then
+            ns.DebugBeginRun("live", "name match from " .. tostring(sender))
+            ns.DebugStep("match", true, matchCount .. " recipe(s) via name")
+            ns.DebugStep("callback", true, "FireCallback(ALERT_FIRED)")
+        end
         ns.FireCallback("ALERT_FIRED", sender, message, matches)
         return true
     end
@@ -224,6 +234,11 @@ local function ScanKeywords(message, sender, event)
     if recentAlerts[spamKey] and (now - recentAlerts[spamKey]) <= COOLDOWN then return end
     recentAlerts[spamKey] = now
 
+    if ns.DebugBeginRun then
+        ns.DebugBeginRun("live", "keyword match from " .. tostring(sender))
+        ns.DebugStep("match", true, "keyword")
+        ns.DebugStep("callback", true, "FireCallback(KEYWORD_ALERT_FIRED)")
+    end
     ns.FireCallback("KEYWORD_ALERT_FIRED", sender, message, {
         triggers = matchedTriggers,
         professions = matchedProfession and { matchedProfession } or {},
@@ -278,8 +293,10 @@ local function OnChatEvent(self, event, message, sender, ...)
     -- ... = languageName, channelName, playerName2, specialFlags, zoneChannelID, channelIndex, channelBaseName
     local _, channelName, _, _, _, _, channelBase = ...
     if not ChannelAllowed(event, channelBase or channelName) then
+        -- No per-message log: high-volume channels would flood chat.
         return
     end
+    -- Scan only. Matches log via DebugBeginRun / ID match lines — not every line.
     if not ScanMessage(message, sender, event) then
         ScanKeywords(message, sender, event)
     end

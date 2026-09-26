@@ -4,6 +4,17 @@
 - [ ] Hear back from Loune-Hyjal (CurseForge) — personal fork vs PR vs public release with credit.
 - [ ] LICENSE (MIT recommended) once release path is clear.
 
+## Done in 0.1.2
+- [x] History UI search filter and status filtering (All / Open / Done / Rejected / Skipped)
+- [x] History multi-field sorting (Time / Sender / Status / Fee)
+- [x] History item icons, item links, ping timeline counters
+- [x] Status pill badge component (`UITheme.CreateUIBadge`)
+- [x] Dedicated Debug Window (`Core/Debug.lua`, `/cb debugwin`) with live pipeline checklist & self-test
+- [x] History test row purge (`/cb history clear tests`) & stats reset
+- [x] Filter out non-product informational categories in bulk track
+- [x] Cache category name lookups in bulk track
+- [x] Locales sync (enUS, esES, frFR)
+
 ## Done in 0.1.1
 - [x] Persisted history queue (account SV)
 - [x] Whisper / Ready / Reject / Skip actions

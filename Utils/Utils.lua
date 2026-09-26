@@ -8,8 +8,12 @@ function ns.Print(msg)
     print("|cff00ccff[CraftBell]|r " .. tostring(msg))
 end
 
--- Debug print (shown only when debug mode is on)
+-- Debug print — always buffers when Debug.lua is loaded; chat only when debug is on
 function ns.Debug(msg)
+    if ns.DebugLog then
+        ns.DebugLog(msg)
+        return
+    end
     local on = ns.debugEnabled or (ns.db and ns.db.settings and ns.db.settings.debugEnabled)
     if on then
         print("|cff888888[CB-Debug]|r " .. tostring(msg))

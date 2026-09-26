@@ -21,6 +21,11 @@ function ns.FireCallback(event, ...)
     end
 end
 
+function ns.CountCallbacks(event)
+    local list = callbacks[event]
+    return list and #list or 0
+end
+
 ----------------------------------------------------------------------
 -- SavedVariables schema (v2 — multi-owner + assignment)
 --
@@ -1276,6 +1281,25 @@ function ns.BulkTrackCurrentProfession(opts)
     local index = 1
     local CHUNK = 25
 
+    -- Cache categoryID -> name so we don't call GetCategoryInfo once per
+    -- recipe; many recipes in a scan share the same category.
+    local categoryNameCache = {}
+    local function GetCategoryNameCached(categoryID)
+        if not categoryID then return nil end
+        if categoryNameCache[categoryID] == nil then
+            local name = false -- false = "looked up, no name" (distinct from uncached nil)
+            if C_TradeSkillUI.GetCategoryInfo then
+                local ok, cat = pcall(C_TradeSkillUI.GetCategoryInfo, categoryID)
+                if ok and cat and cat.name and cat.name ~= "" then
+                    name = cat.name
+                end
+            end
+            categoryNameCache[categoryID] = name
+        end
+        local cached = categoryNameCache[categoryID]
+        return cached ~= false and cached or nil
+    end
+
     local function ProcessChunk()
         local limit = math.min(index + CHUNK - 1, total)
         for i = index, limit do
@@ -1283,6 +1307,8 @@ function ns.BulkTrackCurrentProfession(opts)
             local info = C_TradeSkillUI.GetRecipeInfo(recipeID)
 
             if not info or IsNonProductRecipe(recipeID, info) then
+                skipped = skipped + 1
+            elseif ns.IsInformationalCategory(GetCategoryNameCached(info.categoryID)) then
                 skipped = skipped + 1
             elseif not RecipeInAnySkillLine(recipeID, allowedSet) then
                 skipped = skipped + 1

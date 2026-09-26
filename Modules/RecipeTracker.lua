@@ -264,6 +264,25 @@ local function ShowBulkButton()
     bulkButton:Show()
 end
 
+local INFO_ONLY_CATEGORY_PATTERNS = {
+    "appendix",
+    "^terms$",
+    "^stats$",
+    "glossary",
+    "lore",
+}
+
+function ns.IsInformationalCategory(name)
+    if not name then return false end
+    local lower = name:lower()
+    for _, pattern in ipairs(INFO_ONLY_CATEGORY_PATTERNS) do
+        if lower:find(pattern) then
+            return true
+        end
+    end
+    return false
+end
+
 ----------------------------------------------------------------------
 -- Track All dialog — pick expansions + categories before scanning
 ----------------------------------------------------------------------
@@ -281,16 +300,19 @@ local function CollectCategoriesByExpansion()
     local bySkill = {} -- skillLineID -> { byName = { [lower]= { name, ids } } }
 
     local expansions = ns.GetAvailableProfessionExpansions and ns.GetAvailableProfessionExpansions() or {}
-    for _, e in ipairs(expansions) do
-        local id = e.skillLineID or e.id
-        if id then
-            bySkill[id] = {
-                skillLineID = id,
-                name = e.name or ("#" .. tostring(id)),
-                trained = e.trained ~= false and e.isTrained ~= false,
-                byName = {},
-            }
+    for _, node in pairs(bySkill) do
+        local cats = {}
+        for _, entry in pairs(node.byName) do
+            if not ns.IsInformationalCategory(entry.name) then
+                local idList = {}
+                for id in pairs(entry.ids) do table.insert(idList, id) end
+                table.insert(cats, { name = entry.name, ids = idList })
+            end
         end
+        table.sort(cats, function(a, b) return a.name < b.name end)
+        node.categories = cats
+        node.byName = nil
+        table.insert(tree, node)
     end
 
     if not C_TradeSkillUI or not C_TradeSkillUI.GetAllRecipeIDs then

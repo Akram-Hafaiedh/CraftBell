@@ -1276,3 +1276,88 @@ function ns.CreateUISegmented(parent, opts)
     end)
     return root
 end
+----------------------------------------------------------------------
+-- Badge — compact status pill
+--   local b = ns.CreateUIBadge(parent, {
+--       text = "Contacted",
+--       variant = "info",   -- neutral | info | success | danger | warning | custom
+--       -- or color = { r, g, b },
+--       height = 18,
+--   })
+--   b:SetText("Done")
+--   b:SetVariant("success")
+----------------------------------------------------------------------
+function ns.CreateUIBadge(parent, opts)
+    opts = opts or {}
+    local height = opts.height or 18
+    local padX = opts.padX or 8
+
+    local variants = {
+        neutral = { 0.55, 0.58, 0.62 },
+        info    = { 0.15, 0.75, 0.95 },
+        success = { 0.30, 0.85, 0.45 },
+        danger  = { 0.90, 0.35, 0.35 },
+        warning = { 0.85, 0.65, 0.25 },
+    }
+
+    local frame = CreateFrame("Frame", opts.name, parent, "BackdropTemplate")
+    frame:SetHeight(height)
+    frame:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        edgeSize = 1,
+        insets = { left = 1, right = 1, top = 1, bottom = 1 },
+    })
+
+    local label = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    label:SetPoint("CENTER", 0, 0)
+    label:SetJustifyH("CENTER")
+    frame.label = label
+
+    local currentColor = variants.neutral
+
+    local function ApplyColor(r, g, b)
+        currentColor = { r, g, b }
+        -- Soft filled pill: dim background + brighter border/text
+        frame:SetBackdropColor(r * 0.22, g * 0.22, b * 0.22, 0.95)
+        frame:SetBackdropBorderColor(r * 0.75, g * 0.75, b * 0.75, 0.95)
+        label:SetTextColor(r, g, b, 1)
+    end
+
+    local function FitWidth()
+        local w = (label:GetStringWidth() or 40) + padX * 2
+        frame:SetWidth(math.max(w, opts.minWidth or 36))
+    end
+
+    function frame:SetText(text)
+        label:SetText(text or "")
+        FitWidth()
+    end
+
+    function frame:SetVariant(variant)
+        local c = variants[variant or "neutral"] or variants.neutral
+        ApplyColor(c[1], c[2], c[3])
+    end
+
+    function frame:SetColor(r, g, b)
+        if type(r) == "table" then
+            ApplyColor(r[1] or 1, r[2] or 1, r[3] or 1)
+        else
+            ApplyColor(r or 1, g or 1, b or 1)
+        end
+    end
+
+    function frame:GetText()
+        return label:GetText()
+    end
+
+    -- Init
+    if opts.color then
+        frame:SetColor(opts.color)
+    else
+        frame:SetVariant(opts.variant or "neutral")
+    end
+    frame:SetText(opts.text or "")
+
+    return frame
+end

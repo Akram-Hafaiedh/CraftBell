@@ -575,10 +575,19 @@ end
 -- Show an alert for a recipe match
 ----------------------------------------------------------------------
 function ns.ShowAlert(sender, message, matches)
+    if ns.DebugStep then
+        ns.DebugStep("showalert", true, "from " .. tostring(sender))
+    end
+
     if ns.db and ns.db.settings.relayEnabled and not ns.isRelayedAlert then
         local names = {}
         for _, data in pairs(matches) do table.insert(names, data.itemLink or data.recipeName) end
         ns.AddToHistory(sender, message, matches, table.concat(names, ", "))
+        if ns.DebugStep then
+            ns.DebugStep("history", true, "relay mode — history only")
+            ns.DebugStep("toast", false, "skipped (relayEnabled)")
+        end
+        if ns.DebugEndRun then ns.DebugEndRun() end
         return
     end
 
@@ -603,9 +612,15 @@ function ns.ShowAlert(sender, message, matches)
         end
         if not anyOk then
             ns.Debug("ShowAlert: blocked — no realm-compatible crafter")
+            if ns.DebugStep then
+                ns.DebugStep("realm", false, "no realm-compatible crafter")
+                ns.DebugStep("toast", false, "blocked by realm filter")
+            end
+            if ns.DebugEndRun then ns.DebugEndRun() end
             return
         end
     end
+    if ns.DebugStep then ns.DebugStep("realm", true, "ok") end
 
     -- Optional: only alert when the logged-in character is the crafter
     if ns.db and ns.db.settings.alertsCurrentCharOnly and matches then
@@ -622,10 +637,16 @@ function ns.ShowAlert(sender, message, matches)
             end
         end
         if not next(filtered) then
+            if ns.DebugStep then
+                ns.DebugStep("charfilter", false, "no match for current character")
+                ns.DebugStep("toast", false, "filtered")
+            end
+            if ns.DebugEndRun then ns.DebugEndRun() end
             return
         end
         matches = filtered
     end
+    if ns.DebugStep then ns.DebugStep("charfilter", true, "ok") end
 
     CreateToastFrame()
     CreateExpandedFrame()
@@ -656,6 +677,10 @@ function ns.ShowAlert(sender, message, matches)
 
     local whisperMsg, isMismatched, isBlocked = BuildRecipeWhisper(firstRecipeData)
     currentWhisperMessage = whisperMsg
+    if ns.DebugStep then
+        ns.DebugStep("whisper", whisperMsg and whisperMsg ~= "",
+            isBlocked and "blocked (realm)" or (whisperMsg and (#whisperMsg .. " chars") or "empty"))
+    end
 
     if isMismatched then
         local ownerView = ns.GetRecipeCharacterView and ns.GetRecipeCharacterView(firstRecipeData)
@@ -677,7 +702,18 @@ function ns.ShowAlert(sender, message, matches)
 
     local histEntry = ns.AddToHistory(sender, message, matches, recipeDisplay)
     currentHistoryEntry = histEntry
-    if histEntry.count > 1 then return end -- duplicate, toast already shown once
+    if ns.DebugStep then
+        ns.DebugStep("history", histEntry ~= nil,
+            histEntry and string.format("count=%s status=%s",
+                tostring(histEntry.count or 1), tostring(histEntry.status or "new")) or "nil")
+    end
+    if histEntry.count > 1 then
+        if ns.DebugStep then
+            ns.DebugStep("toast", false, "skipped — duplicate open history (count=" .. tostring(histEntry.count) .. ")")
+        end
+        if ns.DebugEndRun then ns.DebugEndRun() end
+        return -- duplicate, toast already shown once
+    end
 
     PlayAlertSound()
     if expandedFrame then expandedFrame:Hide() end
@@ -685,6 +721,8 @@ function ns.ShowAlert(sender, message, matches)
     toastFrame:SetAlpha(1)
     toastFrame:Raise()
     StartAutoHide()
+    if ns.DebugStep then ns.DebugStep("toast", true, "shown") end
+    if ns.DebugEndRun then ns.DebugEndRun() end
 end
 
 ----------------------------------------------------------------------
@@ -692,12 +730,23 @@ end
 -- fee or realm data to resolve — dynamic whisper built from the keywords)
 ----------------------------------------------------------------------
 function ns.ShowKeywordAlert(sender, message, kwMatches)
+    if ns.DebugStep then
+        ns.DebugStep("showalert", true, "keyword from " .. tostring(sender))
+        ns.DebugStep("realm", true, "n/a (keyword)")
+        ns.DebugStep("charfilter", true, "n/a (keyword)")
+    end
+
     if ns.db and ns.db.settings.relayEnabled and not ns.isRelayedAlert then
         local parts = {}
         for _, list in ipairs({ kwMatches.professions, kwMatches.items, kwMatches.freewords }) do
             for _, v in ipairs(list or {}) do table.insert(parts, v) end
         end
         ns.AddToHistory(sender, message, nil, table.concat(parts, ", "), "keyword", kwMatches)
+        if ns.DebugStep then
+            ns.DebugStep("history", true, "relay mode")
+            ns.DebugStep("toast", false, "skipped (relayEnabled)")
+        end
+        if ns.DebugEndRun then ns.DebugEndRun() end
         return
     end
 
@@ -727,6 +776,9 @@ function ns.ShowKeywordAlert(sender, message, kwMatches)
     if expandedWhisperPreview then
         expandedWhisperPreview:SetText("|cffff80b3" .. kwWhisper .. "|r")
     end
+    if ns.DebugStep then
+        ns.DebugStep("whisper", kwWhisper ~= "", kwWhisper ~= "" and (#kwWhisper .. " chars") or "empty")
+    end
 
     expandedWhisperBtn:SetText(L["WHISPER"] or "Whisper")
     expandedWhisperBtn:SetScript("OnClick", function()
@@ -751,7 +803,17 @@ function ns.ShowKeywordAlert(sender, message, kwMatches)
 
     local histEntry = ns.AddToHistory(sender, message, nil, kwDisplay, "keyword", kwMatches)
     currentHistoryEntry = histEntry
-    if histEntry.count > 1 then return end
+    if ns.DebugStep then
+        ns.DebugStep("history", histEntry ~= nil,
+            histEntry and string.format("count=%s", tostring(histEntry.count or 1)) or "nil")
+    end
+    if histEntry.count > 1 then
+        if ns.DebugStep then
+            ns.DebugStep("toast", false, "skipped — duplicate open history")
+        end
+        if ns.DebugEndRun then ns.DebugEndRun() end
+        return
+    end
 
     PlayAlertSound()
     if expandedFrame then expandedFrame:Hide() end
@@ -759,6 +821,8 @@ function ns.ShowKeywordAlert(sender, message, kwMatches)
     toastFrame:SetAlpha(1)
     toastFrame:Raise()
     StartAutoHide()
+    if ns.DebugStep then ns.DebugStep("toast", true, "shown") end
+    if ns.DebugEndRun then ns.DebugEndRun() end
 end
 
 ----------------------------------------------------------------------
@@ -831,3 +895,9 @@ function ns.NotifyFromHistory(entry)
         ns.Print(L["WHISPER_FAILED"] or "Whisper failed — check target name/realm or message length.")
     end
 end
+
+----------------------------------------------------------------------
+-- Wire scanner / test events to the toast UI
+----------------------------------------------------------------------
+ns.RegisterCallback("ALERT_FIRED", ns.ShowAlert)
+ns.RegisterCallback("KEYWORD_ALERT_FIRED", ns.ShowKeywordAlert)

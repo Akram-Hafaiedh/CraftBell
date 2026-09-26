@@ -2,7 +2,7 @@
 ## Title: CraftBell
 ## Notes: Scan trade chat for crafting requests matching your tracked recipes. Realm-aware, with per-profession pricing.
 ## Author: Akram-Hafaiedh (Mugiwarabøy)
-## Version: 0.1.0
+## Version: 0.1.3
 ## SavedVariables: CraftBellDB
 ## IconTexture: Interface\Icons\Inv_11_0_arathordungeon_bell_color4
 ## Category: Professions
@@ -17,6 +17,7 @@ Core\Database.lua
 Core\History.lua
 Core\FocusMode.lua
 Core\TextFrame.lua
+Core\Debug.lua
 Core\Init.lua
 Core\Minimap.lua
 Modules\RecipeTracker.lua

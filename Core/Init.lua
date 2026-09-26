@@ -53,9 +53,14 @@ SlashCmdList["CRAFTBELL"] = function(msg)
             firstID, firstData = id, data
             break
         end
-        local fakeMessage = string.format(L["TEST_FAKE_MESSAGE"] or "LF someone to craft %s, will pay!",
-            firstData.recipeName or "an item")
+        local link = firstData.itemLink or firstData.recipeName or "an item"
+        local fakeMessage = string.format(L["TEST_FAKE_MESSAGE"] or "LF someone to craft %s, will pay!", link)
         ns.Print(L["ALERT_SIMULATION"] or "Simulating an alert...")
+        if ns.DebugBeginRun then
+            ns.DebugBeginRun("live", "manual /cb test")
+            ns.DebugStep("match", true, "manual test fire")
+            ns.DebugStep("callback", true, "FireCallback(ALERT_FIRED)")
+        end
         ns.FireCallback("ALERT_FIRED", "Testbuyer", fakeMessage, { [firstID] = firstData })
 
     elseif msg == "testcross" then
@@ -91,7 +96,36 @@ SlashCmdList["CRAFTBELL"] = function(msg)
 
     elseif msg == "debug" then
         ns.debugEnabled = not ns.debugEnabled
+        if ns.db and ns.db.settings then
+            ns.db.settings.debugEnabled = ns.debugEnabled
+        end
         ns.Print("Debug mode: " .. (ns.debugEnabled and "ON" or "OFF"))
+        if ns.debugEnabled and ns.ShowDebugWindow then
+            ns.ShowDebugWindow()
+        end
+
+    elseif msg == "debugwin" or msg == "debug window" or msg == "debugui" then
+        if ns.ToggleDebugWindow then
+            ns.ToggleDebugWindow()
+        else
+            ns.Print("Debug window not available.")
+        end
+
+    elseif msg == "history clear" or msg == "clear history" then
+        if ns.HistoryClear then
+            ns.HistoryClear()
+            ns.Print(L["HISTORY_CLEARED"] or "History cleared.")
+        end
+
+    elseif msg == "history clear tests" or msg == "clear tests" then
+        local n = ns.HistoryClearSelfTests and ns.HistoryClearSelfTests() or 0
+        ns.Print(string.format(L["HISTORY_CLEARED_TESTS"] or "Removed %d self-test / test row(s).", n))
+
+    elseif msg == "history clear stats" or msg == "clear stats" then
+        if ns.HistoryClearStats then
+            ns.HistoryClearStats()
+            ns.Print(L["HISTORY_STATS_CLEARED"] or "History stats reset.")
+        end
 
     elseif msg == "dump" or msg:match("^dump ") then
         ns.HandleDumpCommand(msg)
@@ -174,6 +208,10 @@ SlashCmdList["CRAFTBELL"] = function(msg)
         ns.Print("  /cb clear | clear prof | clear all — reset tracked recipes")
         ns.Print("  /cb toast — drag alert popup position")
         ns.Print("  /cb test / testcross / focus / debug")
+        ns.Print("  /cb debugwin — open debug window (self-test is inside)")
+        ns.Print("  /cb history clear — wipe history queue")
+        ns.Print("  /cb history clear tests — remove CBSelfTest / TestBuyer rows")
+        ns.Print("  /cb history clear stats — reset completed/rejected/skipped counters")
         ns.Print("  /cb dump — summary (no chat flood)")
         ns.Print("  /cb dump 20 | next | owners | search <text> | frame")
         ns.Print("  /cb help — this list")
