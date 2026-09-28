@@ -7,6 +7,25 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Planned
 
+## [0.1.4] — 2026-09-28
+
+### Added
+- **History timesheet modal**: per-row **History** button opens a compact panel with relative/absolute times, span, and full ping list.
+- **Custom themed scrollbar** (RealmDisplay-style): accent-colored track/thumb, mouse-wheel + drag + track click; width Thin / Normal / Wide under Settings → Appearance.
+- **Connected-realm alert filter** aligned with RealmDisplay personal-order rules: skip toasts when no recipe **owner** shares the buyer’s connected-realm group.
+- Chat-safe print helpers (`ChatSafeText` / `ChatItemLabel`) so texture escapes no longer show as `[]` in chat.
+
+### Changed
+- History rows: fixed **status** column alignment; **Actions** menu is Whisper / Ready / Reject / Skip only (timestamps live in History modal).
+- Realm settings copy and defaults: block incompatible-realm alerts by default for new profiles; smart crafter picks an owner compatible with the **sender**.
+- Settings: removed empty Keyword/profession pairing placeholder (pairs stay on Keywords tab only).
+- luacheck clean (secret-value globals, unused locals, long lines).
+
+### Fixed
+- History tab scrollbar overflowing the panel (stock bar inset / custom bar inside frame).
+- ChatScanner secret-string taint on sender/message in Midnight.
+- Whisper/assign/track chat lines showing empty icon boxes.
+
 ## [0.1.3] — 2026-09-26
 
 ### Added
