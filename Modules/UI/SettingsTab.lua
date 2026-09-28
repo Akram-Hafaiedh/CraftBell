@@ -460,8 +460,11 @@ function ns.UI.SettingsTab.Init(parent)
     realmHint:SetJustifyH("LEFT")
     realmHint:SetWordWrap(true)
     realmHint:SetTextColor(unpack(C.textMuted))
-    realmHint:SetText(L["REALM_HINT"] or
-        "Same rules as RealmDisplay personal orders: buyer and crafter must share a connected-realm group. When Block is on, toasts are skipped if none of your recipe owners can serve that buyer.")
+        realmHint:SetText(L["REALM_HINT"] or table.concat({
+        "Same rules as RealmDisplay personal orders: buyer and crafter must ",
+        "share a connected-realm group. When Block is on, toasts are skipped ",
+        "if none of your recipe owners can serve that buyer.",
+    }))
 
     ----------------------------------------------------------------------
     -- Chat channels
