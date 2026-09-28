@@ -74,7 +74,7 @@ local defaults = {
         -- Only show toasts for recipes assigned to (or owned by) the logged-in character
         alertsCurrentCharOnly = false,
         -- Skip toast if no crafter realm is compatible with this client
-        blockIncompatibleRealmAlerts = false,
+        blockIncompatibleRealmAlerts = true,
         -- Prefer a realm-compatible owner when assigned crafter is not whisperable
         smartRealmCrafter = true,
         -- Quiet mode (former Focus Mode): mute game audio on alerts
@@ -101,10 +101,12 @@ local defaults = {
         toastOffsetX = -350,
         toastOffsetY = -120,
         toastSize = "medium",
+        scrollBarWidth = "normal", -- thin | normal | wide
+
         -- Left-click the compact toast to send the whisper immediately
         toastClickWhispers = true,
         professionFees = {},
-        realmMismatchMode = "warn",
+        realmMismatchMode = "block",
         -- Matching
         recipeWholeWord = true,
         -- Bulk track defaults

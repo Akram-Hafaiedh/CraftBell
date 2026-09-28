@@ -209,6 +209,7 @@ function ns.UI.ApplyAppearance()
     ns.UI.RefreshAllThemed()
     if ns.UI.ApplyMainWindowAppearance then
         ns.UI.ApplyMainWindowAppearance()
+    if ns.UI.RefreshScrollbars then ns.UI.RefreshScrollbars() end
     end
 end
 

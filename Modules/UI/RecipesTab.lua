@@ -1127,7 +1127,9 @@ function ns.UI.RecipesTab.Refresh()
         y = y + rowHeight
     end
 
-    child:SetSize(math.max(scroll:GetWidth() or 1, 1), math.max(y, 1))
+    child:SetSize(math.max((scroll:GetWidth() or 1) - 12, 1), math.max(y, 1))
+    if scroll.UpdateThumb then scroll:UpdateThumb() end
+    if scroll.SyncWidth then scroll:SyncWidth() end
 
     -- Restore scroll after rebuild (fee edits / assign used to jump the list)
     if scroll and scroll.SetVerticalScroll then

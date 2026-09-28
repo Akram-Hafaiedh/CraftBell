@@ -518,6 +518,7 @@ function ns.UI.HistoryTab.Init(parent)
     end)
 
     -- Scroll area below toolbar
+    -- Custom themed scrollbar is drawn inside the scroll frame.
     scroll, child = ns.UI.CreateScrollArea(parent)
     if scroll then
         scroll:ClearAllPoints()
@@ -588,7 +589,9 @@ function ns.UI.HistoryTab.Refresh()
         empty:SetTextColor(unpack(C.textMuted))
         empty:SetText(L["NO_HISTORY"] or "No alerts yet.")
         y = y + 32
-        child:SetSize(scroll:GetWidth(), math.max(y, 1))
+        child:SetSize(math.max((scroll:GetWidth() or 1) - 12, 1), math.max(y, 1))
+    if scroll.UpdateThumb then scroll:UpdateThumb() end
+    if scroll.SyncWidth then scroll:SyncWidth() end
         return
     end
 
@@ -624,7 +627,9 @@ function ns.UI.HistoryTab.Refresh()
         empty:SetTextColor(unpack(C.textMuted))
         empty:SetText(L["HISTORY_FILTER_EMPTY"] or "No entries for this filter.")
         y = y + 32
-        child:SetSize(scroll:GetWidth(), math.max(y, 1))
+        child:SetSize(math.max((scroll:GetWidth() or 1) - 12, 1), math.max(y, 1))
+    if scroll.UpdateThumb then scroll:UpdateThumb() end
+    if scroll.SyncWidth then scroll:SyncWidth() end
         return
     end
 
@@ -796,7 +801,9 @@ function ns.UI.HistoryTab.Refresh()
         y = y + rowHeight
     end
 
-    child:SetSize(scroll:GetWidth(), math.max(y, 1))
+    child:SetSize(math.max((scroll:GetWidth() or 1) - 12, 1), math.max(y, 1))
+    if scroll.UpdateThumb then scroll:UpdateThumb() end
+    if scroll.SyncWidth then scroll:SyncWidth() end
 end
 
 ns.RegisterCallback("HISTORY_UPDATED", function()

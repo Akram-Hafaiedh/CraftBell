@@ -338,6 +338,8 @@ function ns.UI.KeywordsTab.Refresh()
     y = y + 40
 
     child:SetHeight(math.max(y, 1))
+    if scroll and scroll.UpdateThumb then scroll:UpdateThumb() end
+    if scroll and scroll.SyncWidth then scroll:SyncWidth() end
     if scroll and ns.UI.SyncScrollChildWidth then
         ns.UI.SyncScrollChildWidth(scroll, child, y)
     end

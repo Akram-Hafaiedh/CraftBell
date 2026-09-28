@@ -448,10 +448,10 @@ function ns.UI.SettingsTab.Init(parent)
     end
 
     Header(L["SECTION_REALM"] or "Realm compatibility", -560)
-    CreateCheckbox(child, L["SETTING_BLOCK_BAD_REALM"] or "Do not alert if no crafter can whisper this client realm", -586,
+    CreateCheckbox(child, L["SETTING_BLOCK_BAD_REALM"] or "Skip alerts when no owner shares the buyer's connected realm", -586,
         function() return ns.db.settings.blockIncompatibleRealmAlerts end,
         function(v) ns.db.settings.blockIncompatibleRealmAlerts = v end)
-    CreateCheckbox(child, L["SETTING_SMART_REALM"] or "Smart crafter: use a realm-compatible owner when assigned cannot", -612,
+    CreateCheckbox(child, L["SETTING_SMART_REALM"] or "Smart crafter: pick a realm-compatible owner for the whisper", -612,
         function() return ns.db.settings.smartRealmCrafter ~= false end,
         function(v) ns.db.settings.smartRealmCrafter = v end)
     local realmHint = child:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -460,7 +460,8 @@ function ns.UI.SettingsTab.Init(parent)
     realmHint:SetJustifyH("LEFT")
     realmHint:SetWordWrap(true)
     realmHint:SetTextColor(unpack(C.textMuted))
-    realmHint:SetText(L["REALM_HINT"] or "Smart crafter picks another owner on a connected realm. Turn it off if another addon handles realm routing.")
+    realmHint:SetText(L["REALM_HINT"] or
+        "Same rules as RealmDisplay personal orders: buyer and crafter must share a connected-realm group. When Block is on, toasts are skipped if none of your recipe owners can serve that buyer.")
 
     ----------------------------------------------------------------------
     -- Chat channels
@@ -708,8 +709,37 @@ function ns.UI.SettingsTab.Init(parent)
         end)
     end
 
+    local scrollLabel = child:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    scrollLabel:SetPoint("TOPLEFT", themeLabel, "BOTTOMLEFT", 0, -44)
+    scrollLabel:SetTextColor(unpack(C.textMuted))
+    scrollLabel:SetText(L["APPEARANCE_SCROLLBAR"] or "Scrollbar")
+
+    local SCROLL_OPTS = {
+        { value = "thin",   label = L["APPEARANCE_SCROLL_THIN"] or "Thin" },
+        { value = "normal", label = L["APPEARANCE_SCROLL_NORMAL"] or "Normal" },
+        { value = "wide",   label = L["APPEARANCE_SCROLL_WIDE"] or "Wide" },
+    }
+    local scrollControl
+    if ns.CreateUISegmented then
+        scrollControl = ns.CreateUISegmented(child, {
+            width = 280, height = 26,
+            options = SCROLL_OPTS,
+            value = "normal",
+            onChange = function(value)
+                if ns.db then ns.db.settings.scrollBarWidth = value end
+                if ns.UI.RefreshScrollbars then ns.UI.RefreshScrollbars() end
+            end,
+        })
+        scrollControl:SetPoint("TOPLEFT", scrollLabel, "BOTTOMLEFT", 0, -6)
+        table.insert(settingsRefreshers, function()
+            if ns.db and scrollControl.SetValue then
+                scrollControl:SetValue(ns.db.settings.scrollBarWidth or "normal", true)
+            end
+        end)
+    end
+
     local bgLabel = child:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    bgLabel:SetPoint("TOPLEFT", themeLabel, "BOTTOMLEFT", 0, -44)
+    bgLabel:SetPoint("TOPLEFT", scrollLabel, "BOTTOMLEFT", 0, -44)
     bgLabel:SetTextColor(unpack(C.textMuted))
     bgLabel:SetText(L["APPEARANCE_BG"] or "Background")
 
@@ -900,6 +930,8 @@ function ns.UI.SettingsTab.Init(parent)
 
     -- Tall enough for templates + language/sound/config under them
     child:SetHeight(1200)
+    if scroll and scroll.UpdateThumb then scroll:UpdateThumb() end
+    if scroll and scroll.SyncWidth then scroll:SyncWidth() end
 end
 
 function ns.UI.SettingsTab.Refresh()
