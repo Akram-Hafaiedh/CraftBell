@@ -64,7 +64,7 @@ function ns.DebugLog(msg, opts)
 
     -- Always chat when debug on, unless silent
     if not opts.silent and ns.DebugIsEnabled() then
-        print("|cff888888[CB-Debug]|r " .. text)
+        print("|cff888888[CB-Debug]|r " .. (ns.ChatSafeText and ns.ChatSafeText(text) or text))
     end
 
     if debugFrame and debugFrame:IsShown() and debugFrame.RefreshLog then
@@ -278,13 +278,6 @@ end
 ----------------------------------------------------------------------
 local debugFrame
 
-local function StepLabel(key, mode)
-    local order = (mode == "selftest") and STEP_ORDER_SELFTEST or STEP_ORDER_LIVE
-    for _, s in ipairs(order) do
-        if s.key == key then return s.label end
-    end
-    return key
-end
 
 local function OrderedSteps(run)
     if not run then return {} end

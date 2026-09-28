@@ -1222,12 +1222,9 @@ function ns.CreateUISegmented(parent, opts)
         root:SetValue(value, true)
     end
 
-    function root:SetOptions(list, silent)
+    function root:SetOptions(list, _silent)
         options = list or {}
         Layout()
-        if not silent and onChange and value ~= nil then
-            -- keep current if still valid
-        end
     end
 
     function root:SetValue(v, silent)
@@ -1314,10 +1311,7 @@ function ns.CreateUIBadge(parent, opts)
     label:SetJustifyH("CENTER")
     frame.label = label
 
-    local currentColor = variants.neutral
-
     local function ApplyColor(r, g, b)
-        currentColor = { r, g, b }
         -- Soft filled pill: dim background + brighter border/text
         frame:SetBackdropColor(r * 0.22, g * 0.22, b * 0.22, 0.95)
         frame:SetBackdropBorderColor(r * 0.75, g * 0.75, b * 0.75, 0.95)

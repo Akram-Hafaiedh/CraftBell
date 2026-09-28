@@ -12,6 +12,33 @@ local keywordCache = {
 }
 
 ----------------------------------------------------------------------
+-- Secret Values (WoW 12.0+): chat message/sender can be secret while the
+-- player is in a communication-restricted context (dungeon/raid/PvP/etc.).
+-- Tainted addon code cannot index or method-call secret strings
+-- (e.g. sender:find → "attempt to index local 'sender' (a secret string)").
+-- When we cannot read the text, skip scanning silently — trade chat outside
+-- those contexts remains fully scannable.
+----------------------------------------------------------------------
+local function CanAccessChatText(value)
+    if value == nil then return false end
+    -- issecretvalue / canaccessvalue exist on 12.0+; absent on older clients.
+    if issecretvalue and issecretvalue(value) then
+        if canaccessvalue then
+            return canaccessvalue(value) and true or false
+        end
+        return false
+    end
+    return true
+end
+
+--- Safe substring search that never method-calls the haystack (secret-safe).
+local function SafeFind(haystack, needle, plain)
+    if not haystack or not needle or needle == "" then return nil end
+    if not CanAccessChatText(haystack) then return nil end
+    return string.find(haystack, needle, 1, plain ~= false)
+end
+
+----------------------------------------------------------------------
 -- Rebuild the lookup cache from tracked recipes
 ----------------------------------------------------------------------
 local function RebuildCache()
@@ -97,10 +124,16 @@ end
 ----------------------------------------------------------------------
 local function ScanMessage(message, sender, event)
     if not ns.db or not next(ns.db.trackedRecipes) then return end
+    -- Cannot inspect secret chat payloads under addon taint
+    if not CanAccessChatText(message) then
+        return
+    end
 
     local playerName = UnitName("player")
-    if sender and playerName and sender:find(playerName, 1, true) then
-        return
+    if sender and playerName and CanAccessChatText(sender) then
+        if SafeFind(sender, playerName, true) then
+            return
+        end
     end
 
     local normalizedMsg = ns.NormalizeString(message)
@@ -180,9 +213,12 @@ local function ScanKeywords(message, sender, event)
     if not ns.db or not ns.db.settings.keywordScanEnabled then return end
     if #keywordCache.triggers == 0 then return end
     if #keywordCache.pairs == 0 and #keywordCache.freewords == 0 then return end
+    if not CanAccessChatText(message) then return end
 
     local playerName = UnitName("player")
-    if sender and playerName and sender:find(playerName, 1, true) then return end
+    if sender and playerName and CanAccessChatText(sender) then
+        if SafeFind(sender, playerName, true) then return end
+    end
 
     local normalizedMsg = ns.NormalizeString(message)
 
@@ -270,15 +306,20 @@ local function ChannelAllowed(event, channelBaseName)
         return ch.instance
     end
     if event == "CHAT_MSG_CHANNEL" then
-        local name = (channelBaseName or ""):lower()
+        if channelBaseName and not CanAccessChatText(channelBaseName) then
+            -- Secret channel name under lockdown — cannot classify; skip
+            return false
+        end
+        local name = string.lower(channelBaseName or "")
         -- strip "1. " style prefixes sometimes present
-        name = name:gsub("^%d+%.%s*", "")
-        if name:find("trade", 1, true) then return ch.trade ~= false end
-        if name:find("services", 1, true) or name:find("service", 1, true) then
+        name = string.gsub(name, "^%d+%.%s*", "")
+        if string.find(name, "trade", 1, true) then return ch.trade ~= false end
+        if string.find(name, "services", 1, true) or string.find(name, "service", 1, true) then
             return ch.services ~= false
         end
-        if name:find("general", 1, true) then return ch.general end
-        if name:find("lookingforgroup", 1, true) or name:find("looking for group", 1, true)
+        if string.find(name, "general", 1, true) then return ch.general end
+        if string.find(name, "lookingforgroup", 1, true)
+            or string.find(name, "looking for group", 1, true)
             or name == "lfg" then
             return ch.lookingforgroup
         end
@@ -290,6 +331,10 @@ end
 
 local function OnChatEvent(self, event, message, sender, ...)
     if ns.db and ns.db.settings.dndEnabled then return end
+    -- Secret chat text under communication lockdown: nothing to scan, no error
+    if message ~= nil and not CanAccessChatText(message) then
+        return
+    end
     -- ... = languageName, channelName, playerName2, specialFlags, zoneChannelID, channelIndex, channelBaseName
     local _, channelName, _, _, _, _, channelBase = ...
     if not ChannelAllowed(event, channelBase or channelName) then

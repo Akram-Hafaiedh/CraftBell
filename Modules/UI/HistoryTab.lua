@@ -8,7 +8,7 @@ local C = ns.UI and ns.UI.C or {
 
 ns.UI.HistoryTab = ns.UI.HistoryTab or {}
 
-local parentFrame, toolbar, scroll, child
+local toolbar, scroll, child
 local searchBox, statusBtn, sortBtn, statsChip
 local searchText = ""
 local statusFilter = "all"  -- all | open | done | rejected | skipped
@@ -111,10 +111,127 @@ end
 
 
 local historyActionMenu
+local historyTimesheetPanel
 
 local function HideHistoryActionMenu()
     if historyActionMenu then historyActionMenu:Hide() end
 end
+
+local function HideHistoryTimesheet()
+    if historyTimesheetPanel then historyTimesheetPanel:Hide() end
+end
+
+--- Small modal panel with full ping / timestamp timesheet for one history entry.
+local function ShowHistoryTimesheet(anchor, entry)
+    HideHistoryTimesheet()
+    HideHistoryActionMenu()
+    if not entry then return end
+
+    if not historyTimesheetPanel then
+        local f = CreateFrame("Frame", "CraftBellHistoryTimesheet", UIParent, "BackdropTemplate")
+        f:SetFrameStrata("DIALOG")
+        f:SetFrameLevel(200)
+        f:SetClampedToScreen(true)
+        f:EnableMouse(true)
+        f:SetSize(280, 200)
+        if ns.ApplyDarkTheme then ns.ApplyDarkTheme(f)
+        elseif ns.ApplyCardTheme then ns.ApplyCardTheme(f) end
+        f:SetBackdropColor(0.08, 0.09, 0.11, 0.98)
+        f:SetBackdropBorderColor(0.15, 0.75, 0.95, 0.6)
+
+        f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        f.title:SetPoint("TOPLEFT", 12, -10)
+        f.title:SetTextColor(unpack(C.accent))
+
+        f.closeBtn = ns.CreateUIButton and ns.CreateUIButton(f, {
+            width = 22, height = 22, text = "×", variant = "ghost",
+        }) or CreateFrame("Button", nil, f, "UIPanelCloseButton")
+        if ns.CreateUIButton then
+            f.closeBtn:SetPoint("TOPRIGHT", -6, -6)
+            f.closeBtn:SetScript("OnClick", HideHistoryTimesheet)
+        else
+            f.closeBtn:SetPoint("TOPRIGHT", 2, 2)
+        end
+
+        f.sub = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        f.sub:SetPoint("TOPLEFT", 12, -28)
+        f.sub:SetPoint("RIGHT", -12, 0)
+        f.sub:SetJustifyH("LEFT")
+        f.sub:SetTextColor(unpack(C.text))
+
+        f.body = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+        f.body:SetPoint("TOPLEFT", 12, -48)
+        f.body:SetPoint("BOTTOMRIGHT", -12, 12)
+        f.body:SetJustifyH("LEFT")
+        f.body:SetJustifyV("TOP")
+        f.body:SetWordWrap(true)
+        f.body:SetSpacing(2)
+
+        -- Click outside to close
+        f:SetScript("OnHide", function() end)
+        historyTimesheetPanel = f
+    end
+
+    local f = historyTimesheetPanel
+    local sender = entry.sender or "?"
+    f.title:SetText(L["HISTORY_TIMESHEET"] or "Timesheet")
+    f.sub:SetText(sender)
+
+    local lines = {}
+    local rel = (ns.FormatRelativeTime and ns.FormatRelativeTime(entry.timestamp or entry.firstTimestamp))
+        or entry.time or "—"
+    local firstTs = entry.firstTimestamp or entry.timestamp
+    local lastTs = entry.timestamp or firstTs
+    local count = entry.count or 1
+
+    table.insert(lines, (L["HISTORY_LAST_SEEN"] or "Last") .. ":  " .. rel
+        .. (lastTs and ("  (" .. date("%Y-%m-%d %H:%M:%S", lastTs) .. ")") or ""))
+    if firstTs and lastTs and firstTs ~= lastTs then
+        local firstRel = ns.FormatRelativeTime and ns.FormatRelativeTime(firstTs) or ""
+        table.insert(lines, (L["HISTORY_FIRST_SEEN"] or "First") .. ":  " .. firstRel
+            .. "  (" .. date("%Y-%m-%d %H:%M:%S", firstTs) .. ")")
+    end
+    table.insert(lines, (L["HISTORY_PING_COUNT"] or "Messages") .. ":  " .. tostring(count))
+    if firstTs and lastTs and lastTs > firstTs and ns.FormatDuration then
+        table.insert(lines, (L["HISTORY_SPAN"] or "Span") .. ":  " .. ns.FormatDuration(lastTs - firstTs))
+    end
+
+    local pings = entry.pings
+    if pings and #pings > 0 then
+        table.insert(lines, "")
+        table.insert(lines, L["HISTORY_PING_TIMES"] or "Ping times")
+        local start = math.max(1, #pings - 24)
+        for i = start, #pings do
+            local ts = pings[i]
+            local label = "#" .. i
+            if i == 1 then label = L["HISTORY_FIRST_SEEN"] or "First" end
+            if i == #pings and #pings > 1 then label = L["HISTORY_LAST_SEEN"] or "Last" end
+            local delta = ""
+            if i > 1 and pings[1] and ns.FormatDuration then
+                local d = ts - pings[1]
+                if d > 0 then delta = "  (+" .. ns.FormatDuration(d) .. ")" end
+            end
+            table.insert(lines, string.format("  %s  %s%s", label, date("%H:%M:%S", ts), delta))
+        end
+    elseif entry.message and entry.message ~= "" then
+        table.insert(lines, "")
+        local msg = entry.message
+        if #msg > 160 then msg = msg:sub(1, 157) .. "..." end
+        table.insert(lines, msg)
+    end
+
+    f.body:SetText(table.concat(lines, "\n"))
+    -- Size panel to content (approx)
+    local lineCount = #lines
+    local h = math.min(320, 60 + lineCount * 14)
+    f:SetHeight(math.max(120, h))
+
+    f:ClearAllPoints()
+    f:SetPoint("TOPRIGHT", anchor, "BOTTOMRIGHT", 0, -4)
+    f:Show()
+    f:Raise()
+end
+
 
 local function ClearMenuChildren(frame)
     for _, c in ipairs({ frame:GetChildren() }) do
@@ -149,14 +266,14 @@ local function ShowHistoryActionMenu(anchor, entry)
 
     local st = EntryStatus(entry)
     local terminal = (st == "done" or st == "rejected" or st == "skipped")
-    local width = 160
-    local y = 8
 
     local title = historyActionMenu:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     title:SetPoint("TOPLEFT", 10, -8)
     title:SetTextColor(unpack(C.accent))
     title:SetText(L["ACTIONS"] or "Actions")
-    y = 26
+
+    local width = 160
+    local y = 26
 
     local function AddAction(label, variant, onClick, disabled)
         local btn = ns.CreateUIButton and ns.CreateUIButton(historyActionMenu, {
@@ -285,8 +402,6 @@ local function ShowStatsTooltip(owner)
 end
 
 function ns.UI.HistoryTab.Init(parent)
-    parentFrame = parent
-
     toolbar = CreateFrame("Frame", nil, parent)
     toolbar:SetPoint("TOPLEFT", 0, 0)
     toolbar:SetPoint("TOPRIGHT", 0, 0)
@@ -517,15 +632,13 @@ function ns.UI.HistoryTab.Refresh()
     for _, item in ipairs(view) do
         local entry = item.entry
         local st = EntryStatus(entry)
-        local terminal = (st == "done" or st == "rejected" or st == "skipped")
-
         local row = ns.CreateUIRow and ns.CreateUIRow(child, rowHeight - 4)
             or CreateFrame("Frame", nil, child, "BackdropTemplate")
         row:SetPoint("TOPLEFT", 0, -y)
         row:SetPoint("TOPRIGHT", -4, -y)
         if not ns.CreateUIRow and ns.ApplyCardTheme then ns.ApplyCardTheme(row) end
 
-        -- Actions menu (right)
+        -- Right: History (timesheet modal) | Actions | fixed status column
         local actionsBtn = ns.CreateUIButton and ns.CreateUIButton(row, {
             width = 72, height = 22,
             text = L["ACTIONS"] or "Actions",
@@ -537,10 +650,30 @@ function ns.UI.HistoryTab.Refresh()
             actionsBtn:SetText("Actions")
         end
         actionsBtn:SetScript("OnClick", function(self)
+            HideHistoryTimesheet()
             if historyActionMenu and historyActionMenu:IsShown() then
                 HideHistoryActionMenu()
             else
                 ShowHistoryActionMenu(self, entry)
+            end
+        end)
+
+        local histBtn = ns.CreateUIButton and ns.CreateUIButton(row, {
+            width = 72, height = 22,
+            text = L["HISTORY_BTN"] or "History",
+            variant = "ghost",
+        }) or CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+        histBtn:SetPoint("RIGHT", actionsBtn, "LEFT", -4, 0)
+        if not ns.CreateUIButton then
+            histBtn:SetSize(72, 22)
+            histBtn:SetText(L["HISTORY_BTN"] or "History")
+        end
+        histBtn:SetScript("OnClick", function(self)
+            HideHistoryActionMenu()
+            if historyTimesheetPanel and historyTimesheetPanel:IsShown() then
+                HideHistoryTimesheet()
+            else
+                ShowHistoryTimesheet(self, entry)
             end
         end)
 
@@ -574,79 +707,41 @@ function ns.UI.HistoryTab.Refresh()
         end)
         iconHit:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
-        -- Time (hover = full timesheet) + sender + badge
-        local timeBtn = CreateFrame("Button", nil, row)
-        timeBtn:SetPoint("TOPLEFT", icon, "TOPRIGHT", 10, 6)
-        timeBtn:SetHeight(16)
-        timeBtn:SetWidth(56)
-        timeBtn:EnableMouse(true)
+        -- Fixed columns from the right: Actions (72) | status (~78) | content
+        local STATUS_COL_W = 78
+        local statusAnchor = CreateFrame("Frame", nil, row)
+        statusAnchor:SetSize(STATUS_COL_W, 22)
+        statusAnchor:SetPoint("RIGHT", histBtn, "LEFT", -6, 0)
 
-        local timeFS = timeBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-        timeFS:SetAllPoints()
-        timeFS:SetJustifyH("LEFT")
-        timeFS:SetTextColor(unpack(C.textMuted))
-        timeFS:SetText(entry.time or "")
-
-        timeBtn:SetScript("OnEnter", function(self)
-            timeFS:SetTextColor(unpack(C.accent))
-            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-            GameTooltip:ClearLines()
-            GameTooltip:AddLine(L["HISTORY_TIMESHEET"] or "Timesheet", 0.15, 0.75, 0.95)
-            local count = entry.count or 1
-            local firstT = entry.firstTime or entry.time or "?"
-            local lastT = entry.time or "?"
-            GameTooltip:AddDoubleLine(L["HISTORY_FIRST_SEEN"] or "First seen", firstT, 0.7, 0.7, 0.7, 1, 1, 1)
-            if count > 1 then
-                GameTooltip:AddDoubleLine(L["HISTORY_LAST_SEEN"] or "Last seen", lastT, 0.7, 0.7, 0.7, 1, 1, 1)
-            end
-            GameTooltip:AddDoubleLine(L["HISTORY_PING_COUNT"] or "Messages", tostring(count), 0.7, 0.7, 0.7, 1, 1, 1)
-            local first = entry.firstTimestamp or entry.timestamp
-            local last = entry.timestamp or first
-            if first and last and last > first and ns.FormatDuration then
-                GameTooltip:AddDoubleLine(
-                    L["HISTORY_SPAN"] or "Span",
-                    ns.FormatDuration(last - first),
-                    0.7, 0.7, 0.7, 1, 1, 1)
-            end
-            local pings = entry.pings
-            if pings and #pings > 0 then
-                GameTooltip:AddLine(" ")
-                GameTooltip:AddLine(L["HISTORY_PING_TIMES"] or "Ping times", 0.55, 0.58, 0.62)
-                -- Full timesheet (cap display to last 20 for tooltip height)
-                local start = math.max(1, #pings - 19)
-                for i = start, #pings do
-                    local ts = pings[i]
-                    local label = "#" .. i
-                    if i == 1 then label = L["HISTORY_FIRST_SEEN"] or "First" end
-                    if i == #pings and #pings > 1 then label = L["HISTORY_LAST_SEEN"] or "Last" end
-                    local delta = ""
-                    if i > 1 and pings[1] then
-                        local d = ts - pings[1]
-                        if d > 0 and ns.FormatDuration then
-                            delta = "  (+" .. ns.FormatDuration(d) .. ")"
-                        end
-                    end
-                    GameTooltip:AddDoubleLine(
-                        label,
-                        date("%H:%M:%S", ts) .. delta,
-                        0.75, 0.75, 0.78, 0.9, 0.9, 0.9)
-                end
-            elseif entry.message and entry.message ~= "" then
-                GameTooltip:AddLine(" ")
-                local msg = entry.message
-                if #msg > 120 then msg = msg:sub(1, 117) .. "..." end
-                GameTooltip:AddLine(msg, 0.65, 0.68, 0.72, true)
-            end
-            GameTooltip:Show()
-        end)
-        timeBtn:SetScript("OnLeave", function()
-            timeFS:SetTextColor(unpack(C.textMuted))
-            GameTooltip:Hide()
-        end)
+        local variantMap = {
+            new = "neutral",
+            contacted = "info",
+            done = "success",
+            rejected = "danger",
+            skipped = "warning",
+        }
+        if ns.CreateUIBadge then
+            local badge = ns.CreateUIBadge(statusAnchor, {
+                text = StatusText(entry),
+                variant = variantMap[st] or "neutral",
+                height = 16,
+            })
+            -- Right-align badge inside the fixed column so labels line up
+            badge:ClearAllPoints()
+            badge:SetPoint("RIGHT", statusAnchor, "RIGHT", 0, 0)
+        else
+            local statusFS = statusAnchor:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+            statusFS:SetPoint("RIGHT", statusAnchor, "RIGHT", 0, 0)
+            statusFS:SetJustifyH("RIGHT")
+            statusFS:SetTextColor(unpack(STATUS_COLOR[st] or STATUS_COLOR.new))
+            statusFS:SetText(StatusText(entry))
+        end
 
         local senderFS = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-        senderFS:SetPoint("LEFT", timeBtn, "RIGHT", 6, 0)
+        senderFS:SetPoint("TOPLEFT", icon, "TOPRIGHT", 10, 6)
+        senderFS:SetPoint("RIGHT", statusAnchor, "LEFT", -8, 0)
         senderFS:SetJustifyH("LEFT")
+        senderFS:SetWordWrap(false)
         senderFS:SetTextColor(unpack(C.text))
         local pingBit = ""
         if ns.GetHistoryPingSummary then
@@ -657,31 +752,10 @@ function ns.UI.HistoryTab.Refresh()
         end
         senderFS:SetText((entry.sender or "") .. pingBit)
 
-        local variantMap = {
-            new = "neutral",
-            contacted = "info",
-            done = "success",
-            rejected = "danger",
-            skipped = "warning",
-        }
-        if ns.CreateUIBadge then
-            local badge = ns.CreateUIBadge(row, {
-                text = StatusText(entry),
-                variant = variantMap[st] or "neutral",
-                height = 16,
-            })
-            badge:SetPoint("LEFT", senderFS, "RIGHT", 8, 0)
-        else
-            local statusFS = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-            statusFS:SetPoint("LEFT", senderFS, "RIGHT", 8, 0)
-            statusFS:SetTextColor(unpack(STATUS_COLOR[st] or STATUS_COLOR.new))
-            statusFS:SetText(StatusText(entry))
-        end
-
         -- Recipe name with item tooltip (like Recipes list)
         local nameBtn = CreateFrame("Button", nil, row)
         nameBtn:SetPoint("BOTTOMLEFT", icon, "BOTTOMRIGHT", 10, -2)
-        nameBtn:SetPoint("RIGHT", actionsBtn, "LEFT", -10, 0)
+        nameBtn:SetPoint("RIGHT", statusAnchor, "LEFT", -8, 0)
         nameBtn:SetHeight(16)
         nameBtn:EnableMouse(true)
 

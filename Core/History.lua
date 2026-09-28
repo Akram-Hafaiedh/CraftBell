@@ -262,6 +262,33 @@ function ns.HistoryClearStats()
 end
 
 
+--- Relative wall-clock label for a unix timestamp (history rows / buttons).
+--- e.g. "now", "2m ago", "1h ago", "14:32", "Mon 14:32"
+function ns.FormatRelativeTime(ts)
+    ts = tonumber(ts)
+    if not ts then return "—" end
+    local now = time()
+    local delta = now - ts
+    if delta < 0 then delta = 0 end
+    local Lc = ns.L or {}
+    if delta < 45 then
+        return Lc["HISTORY_TIME_NOW"] or "now"
+    end
+    if delta < 3600 then
+        local m = math.max(1, math.floor(delta / 60))
+        return string.format(Lc["HISTORY_TIME_MIN_AGO"] or "%dm ago", m)
+    end
+    if delta < 86400 then
+        local hr = math.floor(delta / 3600)
+        return string.format(Lc["HISTORY_TIME_HOUR_AGO"] or "%dh ago", hr)
+    end
+    -- Older than a day: show weekday + time, or date if > 6 days
+    if delta < 86400 * 7 then
+        return date("%a %H:%M", ts)
+    end
+    return date("%d %b %H:%M", ts)
+end
+
 --- Human span between two unix times (e.g. "3m", "1h 12m").
 function ns.FormatDuration(seconds)
     seconds = tonumber(seconds) or 0

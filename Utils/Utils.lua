@@ -3,9 +3,30 @@ local addonName, ns = ...
 -- Debug mode: toggle with /cb debug
 ns.debugEnabled = false
 
+----------------------------------------------------------------------
+-- Chat-safe text: |T / |A texture escapes often render as empty boxes []
+-- in the chat frame. Strip them before any print() path.
+----------------------------------------------------------------------
+function ns.ChatSafeText(s)
+    if s == nil then return "" end
+    s = tostring(s)
+    -- Texture and atlas escapes (common source of [] in chat)
+    s = s:gsub("|T.-|t", "")
+    s = s:gsub("|A.-|a", "")
+    -- Battle.net / club key escapes
+    s = s:gsub("|K.-|k", "")
+    return s
+end
+
+--- Label for chat lines: prefer item link (clickable) but without texture junk.
+function ns.ChatItemLabel(itemLink, fallbackName)
+    local s = itemLink or fallbackName or ""
+    return ns.ChatSafeText(s)
+end
+
 -- Colored addon print
 function ns.Print(msg)
-    print("|cff00ccff[CraftBell]|r " .. tostring(msg))
+    print("|cff00ccff[CraftBell]|r " .. ns.ChatSafeText(msg))
 end
 
 -- Debug print — always buffers when Debug.lua is loaded; chat only when debug is on
@@ -16,13 +37,13 @@ function ns.Debug(msg)
     end
     local on = ns.debugEnabled or (ns.db and ns.db.settings and ns.db.settings.debugEnabled)
     if on then
-        print("|cff888888[CB-Debug]|r " .. tostring(msg))
+        print("|cff888888[CB-Debug]|r " .. ns.ChatSafeText(msg))
     end
 end
 
 -- Error print
 function ns.Error(msg)
-    print("|cffff4444[CB-Error]|r " .. tostring(msg))
+    print("|cffff4444[CB-Error]|r " .. ns.ChatSafeText(msg))
 end
 
 ----------------------------------------------------------------------
@@ -409,7 +430,7 @@ end
 
 function ns.Deserialize(str)
     if type(str) ~= "string" or str == "" then return nil end
-    local fn, err = loadstring("return " .. str)
+    local fn = loadstring("return " .. str)
     if not fn then return nil end
     local ok, result = pcall(fn)
     if ok then return result end

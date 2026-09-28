@@ -45,7 +45,15 @@ read_globals = {
     "CopyTable", "wipe", "tinsert", "tremove", "date", "time",
     "hooksecurefunc", "loadstring", "setfenv", "strsplit", "strjoin", "strtrim",
     "L",
+    -- WoW 12.0+ Secret Values API
+    "issecretvalue", "canaccessvalue", "canaccesstable",
+    -- Misc APIs used across modules
+    "BreakUpLargeNumbers", "Ambiguate", "GetUnitName",
+    "InCombatLockdown", "IsInInstance", "UnitGUID",
+    "DEFAULT_CHAT_FRAME", "UIPanelScrollFrameTemplate",
+    "CreateColor", "Mixin", "GenerateClosure", "RunNextFrame",
 }
+
 
 ignore = {
     "211/addonName",
@@ -62,3 +70,5 @@ exclude_files = {
     ".git",
     ".github",
 }
+-- Allow unused vars that are only written (e.g. cached color)
+unused_secondaries = false

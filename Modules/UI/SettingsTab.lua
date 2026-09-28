@@ -313,7 +313,8 @@ function ns.UI.SettingsTab.Init(parent)
     bulkScopeHint:SetJustifyH("LEFT")
     bulkScopeHint:SetWordWrap(true)
     bulkScopeHint:SetTextColor(unpack(C.textMuted))
-    bulkScopeHint:SetText(L["BULK_SCOPE_HINT"] or "Expansion scope: /cb exp list · /cb exp add <name> · /cb exp alltrained · /cb exp clear  (UI checklist later)")
+    bulkScopeHint:SetText(L["BULK_SCOPE_HINT"] or
+        "Expansion scope: /cb exp list · /cb exp add <id> · /cb exp clear")
 
     ----------------------------------------------------------------------
     -- Toast size + position + sound
@@ -496,19 +497,9 @@ function ns.UI.SettingsTab.Init(parent)
         chY = chY - 26
     end
 
-    ----------------------------------------------------------------------
-    -- Keyword ↔ profession pairing (placeholder)
-    ----------------------------------------------------------------------
-    Header(L["SECTION_KW_PAIR"] or "Keyword / profession pairing", chY - 20)
-    local pairHint = child:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    pairHint:SetPoint("TOPLEFT", 4, chY - 44)
-    pairHint:SetPoint("RIGHT", child, "RIGHT", -8, 0)
-    pairHint:SetJustifyH("LEFT")
-    pairHint:SetWordWrap(true)
-    pairHint:SetTextColor(unpack(C.textMuted))
-    pairHint:SetText(L["KW_PAIR_PLACEHOLDER"] or "Coming soon — link free-word keywords to a profession so matches only fire when that craft is relevant.")
+    -- Keyword ↔ profession pairing lives on the Keywords tab only.
 
-    local feesY = chY - 90
+    local feesY = chY - 30
     Header(L["SECTION_FEES"] or "Per-profession fees", feesY)
     local feeHint = child:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     feeHint:SetPoint("TOPLEFT", 4, feesY - 20) -- set below after feesY known

@@ -350,7 +350,8 @@ function ns.TrackRecipe(recipeID, recipeName, professionID, professionName, item
 
     -- opts.silent = true suppresses the per-recipe chat line (used by bulk track)
     if not alreadyOwned and not opts.silent then
-        ns.Print((L["RECIPE_TRACKED"] or "Tracking: ") .. (itemLink or recipeName)
+        ns.Print((L["RECIPE_TRACKED"] or "Tracking: ")
+            .. ns.ChatItemLabel(itemLink, recipeName)
             .. " |cff888888(" .. fullName .. ")|r")
     end
     ns.FireCallback("RECIPE_TRACKED", recipeID)
@@ -381,13 +382,14 @@ function ns.UntrackRecipe(recipeID, characterFullName, opts)
     local remaining = ns.TableCount(data.owners or {})
     if remaining == 0 then
         if not opts.silent then
-            ns.Print((L["RECIPE_REMOVED"] or "Untracked: ") .. (data.itemLink or data.recipeName))
+            ns.Print((L["RECIPE_REMOVED"] or "Untracked: ")
+                .. ns.ChatItemLabel(data.itemLink, data.recipeName))
         end
         ns.db.trackedRecipes[recipeID] = nil
     else
         if not opts.silent then
             ns.Print((L["OWNER_REMOVED"] or "Removed owner: ") .. target
-                .. " — " .. (data.itemLink or data.recipeName)
+                .. " — " .. ns.ChatItemLabel(data.itemLink, data.recipeName)
                 .. " (" .. remaining .. " owner(s) left)")
         end
         data.character = ns.GetAssignedOwner(data)
@@ -403,7 +405,7 @@ function ns.DeleteTrackedRecipe(recipeID, opts)
     local data = ns.db.trackedRecipes[recipeID]
     if not data then return false end
 
-    local label = data.itemLink or data.recipeName or ("#" .. tostring(recipeID))
+    local label = ns.ChatItemLabel(data.itemLink, data.recipeName or ("#" .. tostring(recipeID)))
     ns.db.trackedRecipes[recipeID] = nil
     if not opts.silent then
         ns.Print((L["RECIPE_DELETED"] or "Untracked (all owners): ") .. label)
@@ -524,8 +526,8 @@ function ns.AssignRecipeCharacter(recipeID, characterFullName)
     data.assignedCharacter = characterFullName
     data.character = ns.GetAssignedOwner(data)
     ns.FireCallback("RECIPE_ASSIGNED", recipeID, characterFullName)
-    ns.Print(string.format(L["RECIPE_ASSIGNED"] or "Assigned %s → %s",
-        data.itemLink or data.recipeName or tostring(recipeID),
+    ns.Print(string.format(L["RECIPE_ASSIGNED"] or "Assigned %s -> %s",
+        ns.ChatItemLabel(data.itemLink, data.recipeName or tostring(recipeID)),
         characterFullName or (L["ASSIGN_NONE"] or "none")))
     return true
 end

@@ -4,7 +4,7 @@ local C = ns.UI.C
 
 ns.UI.RecipesTab = ns.UI.RecipesTab or {}
 
-local parentFrame, toolbar, footer, scroll, child
+local toolbar, footer, scroll, child
 local searchBox, sortBtn, filterBtn, countLabel
 local searchText = ""
 local sortMode = "name"       -- name | profession | fee | owners
@@ -578,9 +578,7 @@ local function CollectIDs()
     if not ns.db or not ns.db.trackedRecipes then return ids end
     local q = (searchText or ""):lower()
     for id, data in pairs(ns.db.trackedRecipes) do
-        if filterProfessionID and data.professionID ~= filterProfessionID then
-            -- skip
-        else
+        if not filterProfessionID or data.professionID == filterProfessionID then
             local catOK = true
             if filterCategoryID then
                 local catID = GetRecipeCategory(id, data)
@@ -691,7 +689,6 @@ end
 -- Init / Refresh
 ----------------------------------------------------------------------
 function ns.UI.RecipesTab.Init(parent)
-    parentFrame = parent
 
     -- Top toolbar: search + profession + sort, then category row
     toolbar = CreateFrame("Frame", nil, parent)

@@ -300,19 +300,16 @@ local function CollectCategoriesByExpansion()
     local bySkill = {} -- skillLineID -> { byName = { [lower]= { name, ids } } }
 
     local expansions = ns.GetAvailableProfessionExpansions and ns.GetAvailableProfessionExpansions() or {}
-    for _, node in pairs(bySkill) do
-        local cats = {}
-        for _, entry in pairs(node.byName) do
-            if not ns.IsInformationalCategory(entry.name) then
-                local idList = {}
-                for id in pairs(entry.ids) do table.insert(idList, id) end
-                table.insert(cats, { name = entry.name, ids = idList })
-            end
+    for _, e in ipairs(expansions) do
+        local id = e.skillLineID or e.id
+        if id then
+            bySkill[id] = {
+                skillLineID = id,
+                name = e.name or ("#" .. tostring(id)),
+                trained = e.trained ~= false and e.isTrained ~= false,
+                byName = {},
+            }
         end
-        table.sort(cats, function(a, b) return a.name < b.name end)
-        node.categories = cats
-        node.byName = nil
-        table.insert(tree, node)
     end
 
     if not C_TradeSkillUI or not C_TradeSkillUI.GetAllRecipeIDs then
@@ -369,9 +366,11 @@ local function CollectCategoriesByExpansion()
     for _, node in pairs(bySkill) do
         local cats = {}
         for _, entry in pairs(node.byName) do
-            local idList = {}
-            for id in pairs(entry.ids) do table.insert(idList, id) end
-            table.insert(cats, { name = entry.name, ids = idList })
+            if not ns.IsInformationalCategory(entry.name) then
+                local idList = {}
+                for id in pairs(entry.ids) do table.insert(idList, id) end
+                table.insert(cats, { name = entry.name, ids = idList })
+            end
         end
         table.sort(cats, function(a, b) return a.name < b.name end)
         node.categories = cats
@@ -569,7 +568,7 @@ function ns.ShowBulkTrackDialog()
 
             local node = { skillLineID = id, catRows = {} }
 
-            local expRow = AddToggle(name, defaultOn, function(v)
+            AddToggle(name, defaultOn, function(v)
                 SetExpansionEnabled(node, v and true or false)
             end, 4)
 
