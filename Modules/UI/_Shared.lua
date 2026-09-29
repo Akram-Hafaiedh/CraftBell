@@ -97,10 +97,23 @@ function ns.UI.CreateScrollArea(parent)
     child:SetSize(1, 1)
     scroll:SetScrollChild(child)
 
+    local function MaxScroll()
+        local viewH = scroll:GetHeight() or 1
+        local childH = child:GetHeight() or 1
+        local computed = math.max(childH - viewH, 0)
+        -- Engine range is authoritative once layout has run; ignore 0 when
+        -- we know the child is taller (range can lag one frame after SetHeight).
+        if scroll.GetVerticalScrollRange then
+            local r = scroll:GetVerticalScrollRange()
+            if r and r > 0 then return r end
+        end
+        return computed
+    end
+
     local function UpdateThumb()
         local viewH = scroll:GetHeight() or 1
         local childH = child:GetHeight() or 1
-        local maxScroll = math.max(childH - viewH, 0)
+        local maxScroll = MaxScroll()
         if maxScroll <= 0 then
             track:Hide()
             scroll:SetVerticalScroll(0)
@@ -108,12 +121,17 @@ function ns.UI.CreateScrollArea(parent)
         end
         track:Show()
         local ratio = viewH / math.max(childH, 1)
-        local thumbH = math.max(24, viewH * ratio)
+        local thumbH = math.max(24, math.min(viewH, viewH * ratio))
         thumb:SetHeight(thumbH)
         local cur = scroll:GetVerticalScroll() or 0
+        -- Clamp if content shrank (e.g. fee list cleared)
+        if cur > maxScroll then
+            cur = maxScroll
+            scroll:SetVerticalScroll(cur)
+        end
         local trackH = track:GetHeight() or 1
         local y = 0
-        if maxScroll > 0 then
+        if maxScroll > 0 and trackH > thumbH then
             y = -(cur / maxScroll) * (trackH - thumbH)
         end
         thumb:ClearAllPoints()
@@ -136,8 +154,7 @@ function ns.UI.CreateScrollArea(parent)
     scroll:SetScript("OnVerticalScroll", function() UpdateThumb() end)
     scroll:SetScript("OnMouseWheel", function(self, delta)
         local viewH = self:GetHeight() or 1
-        local childH = child:GetHeight() or 1
-        local maxScroll = math.max(childH - viewH, 0)
+        local maxScroll = MaxScroll()
         local cur = self:GetVerticalScroll() or 0
         local step = math.max(24, viewH * 0.15)
         local new = math.min(maxScroll, math.max(0, cur - delta * step))
@@ -167,9 +184,7 @@ function ns.UI.CreateScrollArea(parent)
         local thumbH = self:GetHeight() or 24
         local rel = top - cursorY - thumbH / 2
         rel = math.min(math.max(rel, 0), trackH - thumbH)
-        local viewH = scroll:GetHeight() or 1
-        local childH = child:GetHeight() or 1
-        local maxScroll = math.max(childH - viewH, 0)
+        local maxScroll = MaxScroll()
         local offset = 0
         if trackH > thumbH then
             offset = (rel / (trackH - thumbH)) * maxScroll
@@ -190,7 +205,7 @@ function ns.UI.CreateScrollArea(parent)
         local thumbH = thumb:GetHeight() or 24
         local rel = top - cursorY - thumbH / 2
         rel = math.min(math.max(rel, 0), trackH - thumbH)
-        local maxScroll = math.max((child:GetHeight() or 1) - (scroll:GetHeight() or 1), 0)
+        local maxScroll = MaxScroll()
         local offset = 0
         if trackH > thumbH then
             offset = (rel / (trackH - thumbH)) * maxScroll

@@ -537,6 +537,7 @@ function ns.UI.HistoryTab.Refresh()
     hint:SetPoint("TOPLEFT", 8, -y)
     hint:SetPoint("RIGHT", -220, 0)
     hint:SetJustifyH("LEFT")
+    hint:SetWordWrap(true)
     hint:SetTextColor(unpack(C.textMuted))
     hint:SetText(L["HISTORY_HINT"] or "Whisper = offer · Ready = mailed · Reject = declined · Skip = someone else took it")
 
@@ -580,7 +581,12 @@ function ns.UI.HistoryTab.Refresh()
     end)
     clearTestBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
-    y = y + 28
+    local hintH = 28
+    if hint.GetStringHeight then
+        local sh = hint:GetStringHeight()
+        if sh and sh > 0 then hintH = math.max(28, math.ceil(sh) + 6) end
+    end
+    y = y + hintH
 
     local list = ns.alertHistory
     if not list or #list == 0 then
@@ -588,10 +594,10 @@ function ns.UI.HistoryTab.Refresh()
         empty:SetPoint("TOPLEFT", 8, -y)
         empty:SetTextColor(unpack(C.textMuted))
         empty:SetText(L["NO_HISTORY"] or "No alerts yet.")
-        y = y + 32
+        y = y + 40
         child:SetSize(math.max((scroll:GetWidth() or 1) - 12, 1), math.max(y, 1))
-    if scroll.UpdateThumb then scroll:UpdateThumb() end
-    if scroll.SyncWidth then scroll:SyncWidth() end
+        if scroll.UpdateThumb then scroll:UpdateThumb() end
+        if scroll.SyncWidth then scroll:SyncWidth() end
         return
     end
 
@@ -626,10 +632,10 @@ function ns.UI.HistoryTab.Refresh()
         empty:SetPoint("TOPLEFT", 8, -y)
         empty:SetTextColor(unpack(C.textMuted))
         empty:SetText(L["HISTORY_FILTER_EMPTY"] or "No entries for this filter.")
-        y = y + 32
+        y = y + 40
         child:SetSize(math.max((scroll:GetWidth() or 1) - 12, 1), math.max(y, 1))
-    if scroll.UpdateThumb then scroll:UpdateThumb() end
-    if scroll.SyncWidth then scroll:SyncWidth() end
+        if scroll.UpdateThumb then scroll:UpdateThumb() end
+        if scroll.SyncWidth then scroll:SyncWidth() end
         return
     end
 
@@ -801,6 +807,7 @@ function ns.UI.HistoryTab.Refresh()
         y = y + rowHeight
     end
 
+    y = y + 16 -- bottom padding so last row isn't flush against the edge
     child:SetSize(math.max((scroll:GetWidth() or 1) - 12, 1), math.max(y, 1))
     if scroll.UpdateThumb then scroll:UpdateThumb() end
     if scroll.SyncWidth then scroll:SyncWidth() end

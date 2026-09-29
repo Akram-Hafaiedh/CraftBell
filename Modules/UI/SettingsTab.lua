@@ -8,6 +8,7 @@ local scroll, child
 local settingsRefreshers = {}
 local feeListFrame, feeProfInput, feeAmountInput
 local templateBox, crossTemplateBox
+local settingsBottomAnchor -- last content widget (export btn); used to size the scroll child
 
 local DEFAULT_SAME = L["DEFAULT_TEMPLATE"]
     or "Hi! I saw you're looking for {item}. I can craft it ({profession}). Fee: {fee}. Let me know!"
@@ -220,6 +221,30 @@ local function RefreshFeeList()
     feeListFrame.addBtn:Show()
 
     feeListFrame:SetHeight(y + 36)
+    -- Fee list height changed → content below moved; resync scroll range
+    if ns.UI.SettingsTab.SyncScrollHeight then
+        ns.UI.SettingsTab.SyncScrollHeight()
+    end
+end
+
+--- Size the settings scroll child to the real bottom of the layout.
+--- Content below the fee list is relatively anchored, so a fixed height
+--- (old 1200) left Appearance / Config unreachable once the fee list grew.
+function ns.UI.SettingsTab.SyncScrollHeight()
+    if not child or not scroll then return end
+    local pad = 48
+    local height = 1600 -- safe fallback when not laid out yet
+    local anchor = settingsBottomAnchor
+    if anchor and child.GetTop and anchor.GetBottom then
+        local ct = child:GetTop()
+        local ab = anchor:GetBottom()
+        if ct and ab and ct > ab then
+            height = math.max(ct - ab + pad, 400)
+        end
+    end
+    child:SetHeight(height)
+    if scroll.UpdateThumb then scroll:UpdateThumb() end
+    if scroll.SyncWidth then scroll:SyncWidth() end
 end
 
 local function EnsureDefaultTemplates()
@@ -823,6 +848,7 @@ function ns.UI.SettingsTab.Init(parent)
     }) or CreateFrame("Button", nil, child, "UIPanelButtonTemplate")
     exportBtn:SetPoint("TOPLEFT", configHeader, "BOTTOMLEFT", 0, -8)
     if not ns.CreateUIButton then exportBtn:SetSize(120, 26); exportBtn:SetText("Export") end
+    settingsBottomAnchor = exportBtn
     exportBtn:SetScript("OnClick", function()
         if not ns.ExportConfig then
             ns.Print("Export not available.")
@@ -931,18 +957,34 @@ function ns.UI.SettingsTab.Init(parent)
         CraftBellImportFrame:Show()
     end)
 
-    -- Tall enough for templates + language/sound/config under them
-    child:SetHeight(1200)
-    if scroll and scroll.UpdateThumb then scroll:UpdateThumb() end
-    if scroll and scroll.SyncWidth then scroll:SyncWidth() end
+    -- Size to real content bottom (fee list + templates + appearance + config).
+    -- Deferred one frame so anchors have resolved heights when the window is shown.
+    ns.UI.SettingsTab.SyncScrollHeight()
+    if scroll and scroll.HookScript then
+        scroll:HookScript("OnShow", function()
+            C_Timer.After(0, function()
+                if ns.UI.SettingsTab.SyncScrollHeight then
+                    ns.UI.SettingsTab.SyncScrollHeight()
+                end
+            end)
+        end)
+    end
 end
 
 function ns.UI.SettingsTab.Refresh()
     if not ns.db or not child then return end
-    ns.UI.SyncScrollChildWidth(scroll, child, 1200)
     for _, refresh in ipairs(settingsRefreshers) do refresh() end
     RefreshFeeList()
     RefreshTemplateBoxes()
+    -- After fee list / template width changes, resync scroll range to content bottom
+    ns.UI.SettingsTab.SyncScrollHeight()
+    if scroll and scroll.SyncWidth then scroll:SyncWidth() end
+    -- One-frame defer: GetTop/GetBottom are reliable once the parent is laid out
+    C_Timer.After(0, function()
+        if child and child:IsShown() and ns.UI.SettingsTab.SyncScrollHeight then
+            ns.UI.SettingsTab.SyncScrollHeight()
+        end
+    end)
 end
 
 ns.RegisterCallback("DB_READY", function()

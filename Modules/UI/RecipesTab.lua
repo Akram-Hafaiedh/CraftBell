@@ -976,7 +976,13 @@ function ns.UI.RecipesTab.Refresh()
         else
             empty:SetText(L["NO_RECIPES_MATCH"] or "No recipes match this search / filter.")
         end
-        y = 220
+        -- Real wrapped height so long locale empty-states stay fully scrollable
+        local h = 220
+        if empty.GetStringHeight then
+            local sh = empty:GetStringHeight()
+            if sh and sh > 0 then h = math.max(48, math.ceil(sh) + 24) end
+        end
+        y = h
     end
 
     for _, id in ipairs(ids) do
@@ -1127,6 +1133,7 @@ function ns.UI.RecipesTab.Refresh()
         y = y + rowHeight
     end
 
+    y = y + 16 -- bottom padding so last row isn't flush against the edge
     child:SetSize(math.max((scroll:GetWidth() or 1) - 12, 1), math.max(y, 1))
     if scroll.UpdateThumb then scroll:UpdateThumb() end
     if scroll.SyncWidth then scroll:SyncWidth() end
@@ -1139,7 +1146,14 @@ function ns.UI.RecipesTab.Refresh()
             if scroll.GetVerticalScrollRange then
                 maxScroll = scroll:GetVerticalScrollRange() or 0
             end
+            -- Fallback if range lags one frame after SetHeight
+            if maxScroll <= 0 then
+                local viewH = scroll:GetHeight() or 1
+                local childH = child and child:GetHeight() or 1
+                maxScroll = math.max(childH - viewH, 0)
+            end
             scroll:SetVerticalScroll(math.min(savedScroll or 0, maxScroll))
+            if scroll.UpdateThumb then scroll:UpdateThumb() end
         end)
     end
 end

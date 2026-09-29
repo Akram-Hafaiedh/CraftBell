@@ -54,7 +54,14 @@ function ns.UI.KeywordsTab.Refresh()
         fs:SetWordWrap(true)
         fs:SetTextColor(unpack(C.textMuted))
         fs:SetText(text or "")
-        y = y + 28
+        -- Use real wrapped height so long hints don't undersize the scroll child
+        -- (fixed +28 left the bottom of Keywords unreachable when text wrapped).
+        local h = 28
+        if fs.GetStringHeight then
+            local sh = fs:GetStringHeight()
+            if sh and sh > 0 then h = math.max(28, math.ceil(sh) + 6) end
+        end
+        y = y + h
     end
 
     Header(L["SECTION_MATCHING"] or "Matching")
@@ -335,7 +342,7 @@ function ns.UI.KeywordsTab.Refresh()
         ns.UI.KeywordsTab.Refresh()
         ns.Print(L["KEYWORDS_RESET"] or "Keywords reset.")
     end)
-    y = y + 40
+    y = y + 48 -- bottom padding so last control isn't flush against the edge
 
     child:SetHeight(math.max(y, 1))
     if scroll and scroll.UpdateThumb then scroll:UpdateThumb() end
