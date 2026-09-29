@@ -448,12 +448,39 @@ function ns.CreateUIEditBox(parent, opts)
     if opts.numeric then box:SetNumeric(true) end
     if opts.maxLetters then box:SetMaxLetters(opts.maxLetters) end
 
+    local placeholderFS
+    if opts.placeholder and opts.placeholder ~= "" then
+        placeholderFS = box:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+        placeholderFS:SetPoint("LEFT", 8, 0)
+        placeholderFS:SetPoint("RIGHT", -8, 0)
+        placeholderFS:SetJustifyH("LEFT")
+        placeholderFS:SetText(opts.placeholder)
+        box._placeholderFS = placeholderFS
+    end
+
+    local function UpdatePlaceholder()
+        if not placeholderFS then return end
+        local empty = (box:GetText() or "") == ""
+        if empty and not box:HasFocus() then
+            placeholderFS:Show()
+        else
+            placeholderFS:Hide()
+        end
+    end
+    box.UpdatePlaceholder = UpdatePlaceholder
+
     box:SetScript("OnEditFocusGained", function(self)
         self:SetBackdropBorderColor(unpack(ns.UI.colors.accent))
+        if placeholderFS then placeholderFS:Hide() end
     end)
     box:SetScript("OnEditFocusLost", function(self)
         self:SetBackdropBorderColor(unpack(ns.UI.colors.border))
+        UpdatePlaceholder()
     end)
+    box:HookScript("OnTextChanged", function()
+        UpdatePlaceholder()
+    end)
+    UpdatePlaceholder()
     return box
 end
 

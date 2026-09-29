@@ -69,6 +69,7 @@ exclude_files = {
     "Locales",
     ".git",
     ".github",
+    ".vscode"
 }
 -- Allow unused vars that are only written (e.g. cached color)
 unused_secondaries = false

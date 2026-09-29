@@ -245,6 +245,110 @@ local function ClearMenuChildren(frame)
     end
 end
 
+local historyChatPanel
+
+local function HideHistoryChatLog()
+    if historyChatPanel then historyChatPanel:Hide() end
+end
+
+local function ShowHistoryChatLog(anchor, entry)
+    if HideHistoryTimesheet then HideHistoryTimesheet() end
+    if HideHistoryActionMenu then HideHistoryActionMenu() end
+    if not entry then return end
+
+    if not historyChatPanel then
+        local f = CreateFrame("Frame", "CraftBellHistoryChat", UIParent, "BackdropTemplate")
+        f:SetSize(360, 280)
+        f:SetFrameStrata("DIALOG")
+        f:SetClampedToScreen(true)
+        f:EnableMouse(true)
+        if ns.ApplyDarkTheme then ns.ApplyDarkTheme(f) end
+
+        f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        f.title:SetPoint("TOPLEFT", 12, -10)
+        f.title:SetTextColor(unpack(C.accent))
+
+        f.sub = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        f.sub:SetPoint("TOPLEFT", 12, -28)
+        f.sub:SetPoint("RIGHT", -28, 0)
+        f.sub:SetJustifyH("LEFT")
+        f.sub:SetTextColor(unpack(C.text))
+
+        if ns.CreateUIButton then
+            f.closeBtn = ns.CreateUIButton(f, { width = 22, height = 22, text = "x", variant = "ghost" })
+            f.closeBtn:SetPoint("TOPRIGHT", -6, -6)
+            f.closeBtn:SetScript("OnClick", HideHistoryChatLog)
+        else
+            f.closeBtn = CreateFrame("Button", nil, f, "UIPanelCloseButton")
+            f.closeBtn:SetPoint("TOPRIGHT", 2, 2)
+            f.closeBtn:SetScript("OnClick", HideHistoryChatLog)
+        end
+
+        local chatScroll = CreateFrame("ScrollFrame", nil, f, "UIPanelScrollFrameTemplate")
+        chatScroll:SetPoint("TOPLEFT", 12, -48)
+        chatScroll:SetPoint("BOTTOMRIGHT", -28, 12)
+        local chatChild = CreateFrame("Frame", nil, chatScroll)
+        chatChild:SetSize(320, 10)
+        chatScroll:SetScrollChild(chatChild)
+        f.scroll = chatScroll
+        f.child = chatChild
+        f.body = chatChild:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+        f.body:SetPoint("TOPLEFT", 0, 0)
+        f.body:SetWidth(300)
+        f.body:SetJustifyH("LEFT")
+        f.body:SetJustifyV("TOP")
+        f.body:SetWordWrap(true)
+        f.body:SetSpacing(2)
+        historyChatPanel = f
+    end
+
+    local f = historyChatPanel
+    f.title:SetText(L["HISTORY_CHAT_LOG"] or "Conversation")
+    f.sub:SetText(entry.sender or "?")
+
+    local lines = {}
+    if entry.message and entry.message ~= "" then
+        local when = entry.firstTime or entry.time or ""
+        table.insert(lines, string.format("|cff888888[%s] trade alert|r", when))
+        local msg = entry.message
+        if #msg > 200 then msg = msg:sub(1, 197) .. "..." end
+        table.insert(lines, "|cffaaaaaa" .. msg .. "|r")
+        table.insert(lines, "")
+    end
+
+    local sinceTs = entry.firstTimestamp or entry.timestamp
+    if sinceTs then sinceTs = sinceTs - 3600 end
+    local log = (ns.GetWhisperLog and ns.GetWhisperLog(entry.sender, sinceTs)) or {}
+    if #log == 0 then
+        table.insert(lines, L["HISTORY_CHAT_EMPTY"] or "No whispers logged with this player yet.")
+        table.insert(lines, "")
+        table.insert(lines, L["HISTORY_CHAT_HINT"] or "Whispers are saved from now on while CraftBell is loaded.")
+    else
+        for _, m in ipairs(log) do
+            local ts = m.t and date("%H:%M:%S", m.t) or "??"
+            local who
+            if m.dir == "out" then
+                who = "|cff80ff80You|r"
+            else
+                who = "|cff80b0ffThem|r"
+            end
+            local text = m.text or ""
+            if ns.ChatSafeText then text = ns.ChatSafeText(text) end
+            table.insert(lines, string.format("[%s] %s: %s", ts, who, text))
+        end
+    end
+
+    f.body:SetText(table.concat(lines, "\n"))
+    local h = f.body:GetStringHeight() or 200
+    f.child:SetHeight(math.max(h + 8, 40))
+    f.scroll:SetVerticalScroll(0)
+
+    f:ClearAllPoints()
+    f:SetPoint("TOPRIGHT", anchor, "BOTTOMRIGHT", 0, -4)
+    f:Show()
+    f:Raise()
+end
+
 local function ShowHistoryActionMenu(anchor, entry)
     HideHistoryActionMenu()
     if not historyActionMenu then
@@ -307,6 +411,15 @@ local function ShowHistoryActionMenu(anchor, entry)
     AddAction(L["HISTORY_READY"] or "Ready", "primary", function()
         if ns.NotifyFromHistory then ns.NotifyFromHistory(entry) end
     end, st == "done")
+
+    -- Mark done without sending the ready/notify whisper
+    AddAction(L["HISTORY_MARK_DONE"] or "Mark done", "ghost", function()
+        if ns.HistoryMarkDone then ns.HistoryMarkDone(entry) end
+    end, st == "done")
+
+    AddAction(L["HISTORY_CHAT_LOG"] or "Conversation", "ghost", function()
+        if ShowHistoryChatLog then ShowHistoryChatLog(anchor, entry) end
+    end, false)
 
     AddAction(L["HISTORY_REJECT"] or "Reject", "ghost", function()
         if ns.HistoryMarkRejected then ns.HistoryMarkRejected(entry) end

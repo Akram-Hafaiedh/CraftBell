@@ -301,21 +301,70 @@ function ns.UI.SettingsTab.Init(parent)
             end
         end)
     end
+    local langHint = child:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    langHint:SetPoint("TOPLEFT", 4, -58)
+    langHint:SetPoint("RIGHT", child, "RIGHT", -8, 0)
+    langHint:SetJustifyH("LEFT")
+    langHint:SetWordWrap(true)
+    langHint:SetTextColor(unpack(C.textMuted))
+    langHint:SetText(L["LANGUAGE_HINT"] or
+        "Addon window labels only — does not change trade-chat keywords.")
 
-    Header(L["SECTION_GENERAL"] or "General", -70)
-    CreateCheckbox(child, L["SETTING_SOUND"] or "Play sound on alert", -96,
+    -- Trade chat language (realm): examples + default triggers, NOT UI language
+    local chatLangLabel = child:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    chatLangLabel:SetPoint("TOPLEFT", 4, -86)
+    chatLangLabel:SetTextColor(unpack(C.textMuted))
+    chatLangLabel:SetText(L["SETTING_CHAT_LANGUAGE"] or "Trade chat language")
+    local CHAT_LANGS = {
+        { value = "en", label = "English (LF, neck, back…)" },
+        { value = "fr", label = "Français (Cherche, cou, cape…)" },
+        { value = "es", label = "Español (Busco, cuello, capa…)" },
+    }
+    local chatLangDD = ns.CreateUIDropdown and ns.CreateUIDropdown(child, {
+        width = 280, height = 26, placeholder = "English (LF, neck…)",
+        onSelect = function(value)
+            if not ns.db then return end
+            if ns.SetChatLanguage then ns.SetChatLanguage(value)
+            else ns.db.settings.chatLanguage = value end
+            ns.Print(L["CHAT_LANGUAGE_SET"] or
+                "Trade chat language saved. Keyword examples updated — existing list unchanged.")
+            if ns.UI.KeywordsTab and ns.UI.KeywordsTab.Refresh then
+                ns.UI.KeywordsTab.Refresh()
+            end
+        end,
+    })
+    if chatLangDD then
+        chatLangDD:SetPoint("TOPLEFT", 4, -108)
+        chatLangDD:SetOptions(CHAT_LANGS)
+        table.insert(settingsRefreshers, function()
+            if ns.db and chatLangDD.SetValue then
+                chatLangDD:SetValue(ns.db.settings.chatLanguage or "en", true)
+            end
+        end)
+    end
+    local chatLangHint = child:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    chatLangHint:SetPoint("TOPLEFT", 4, -138)
+    chatLangHint:SetPoint("RIGHT", child, "RIGHT", -8, 0)
+    chatLangHint:SetJustifyH("LEFT")
+    chatLangHint:SetWordWrap(true)
+    chatLangHint:SetTextColor(unpack(C.textMuted))
+    chatLangHint:SetText(L["CHAT_LANGUAGE_HINT"] or
+        "Language of trade chat on this realm. Controls keyword examples and default triggers. Not the addon UI language.")
+
+    Header(L["SECTION_GENERAL"] or "General", -180)
+    CreateCheckbox(child, L["SETTING_SOUND"] or "Play sound on alert", -206,
         function() return ns.db.settings.soundEnabled end,
         function(v) ns.db.settings.soundEnabled = v end)
-    CreateCheckbox(child, L["SETTING_KEYWORD_SCAN"] or "Scan for keyword matches", -122,
+    CreateCheckbox(child, L["SETTING_KEYWORD_SCAN"] or "Scan for keyword matches", -232,
         function() return ns.db.settings.keywordScanEnabled end,
         function(v) ns.db.settings.keywordScanEnabled = v end)
-    CreateCheckbox(child, L["SETTING_DND"] or "Do Not Disturb (pause scanning)", -148,
+    CreateCheckbox(child, L["SETTING_DND"] or "Do Not Disturb (pause scanning)", -258,
         function() return ns.db.settings.dndEnabled end,
         function(v) ns.db.settings.dndEnabled = v end)
-    CreateCheckbox(child, L["SETTING_CURRENT_CHAR_ONLY"] or "Alerts only for this character (assigned crafter)", -174,
+    CreateCheckbox(child, L["SETTING_CURRENT_CHAR_ONLY"] or "Alerts only for this character (assigned crafter)", -284,
         function() return ns.db.settings.alertsCurrentCharOnly end,
         function(v) ns.db.settings.alertsCurrentCharOnly = v end)
-    CreateCheckbox(child, L["SETTING_QUIET_MODE"] or "Quiet mode (mute game sound during alerts)", -200,
+    CreateCheckbox(child, L["SETTING_QUIET_MODE"] or "Quiet mode (mute game sound during alerts)", -310,
         function() return ns.db.settings.quietModeEnabled end,
         function(v)
             ns.db.settings.quietModeEnabled = v
@@ -325,15 +374,15 @@ function ns.UI.SettingsTab.Init(parent)
     ----------------------------------------------------------------------
     -- Bulk track (Track All button / /cb bulk)
     ----------------------------------------------------------------------
-    Header(L["SECTION_BULK"] or "Bulk track", -236)
-    CreateCheckbox(child, L["BULK_OPT_ORDERS"] or "Orders only (Crafting Orders table)", -262,
+    Header(L["SECTION_BULK"] or "Bulk track", -346)
+    CreateCheckbox(child, L["BULK_OPT_ORDERS"] or "Orders only (Crafting Orders table)", -372,
         function() return ns.db.settings.bulkTrackOrdersOnly ~= false end,
         function(v) ns.db.settings.bulkTrackOrdersOnly = v end)
-    CreateCheckbox(child, L["BULK_OPT_LEARNED"] or "Learned only", -288,
+    CreateCheckbox(child, L["BULK_OPT_LEARNED"] or "Learned only", -398,
         function() return ns.db.settings.bulkTrackLearnedOnly end,
         function(v) ns.db.settings.bulkTrackLearnedOnly = v end)
     local bulkScopeHint = child:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    bulkScopeHint:SetPoint("TOPLEFT", 4, -314)
+    bulkScopeHint:SetPoint("TOPLEFT", 4, -424)
     bulkScopeHint:SetPoint("RIGHT", child, "RIGHT", -8, 0)
     bulkScopeHint:SetJustifyH("LEFT")
     bulkScopeHint:SetWordWrap(true)
@@ -344,10 +393,10 @@ function ns.UI.SettingsTab.Init(parent)
     ----------------------------------------------------------------------
     -- Toast size + position + sound
     ----------------------------------------------------------------------
-    Header(L["SECTION_TOAST"] or "Alert popup", -350)
+    Header(L["SECTION_TOAST"] or "Alert popup", -460)
 
     local toastSizeLabel = child:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    toastSizeLabel:SetPoint("TOPLEFT", 4, -370)
+    toastSizeLabel:SetPoint("TOPLEFT", 4, -480)
     toastSizeLabel:SetTextColor(unpack(C.textMuted))
     toastSizeLabel:SetText(L["TOAST_SIZE_LABEL"] or "Popup size:")
 
@@ -369,7 +418,7 @@ function ns.UI.SettingsTab.Init(parent)
                 if ns.ApplyToastSize then ns.ApplyToastSize(value) end
             end,
         })
-        toastSizeControl:SetPoint("TOPLEFT", 4, -390)
+        toastSizeControl:SetPoint("TOPLEFT", 4, -500)
         table.insert(settingsRefreshers, function()
             if ns.db and toastSizeControl.SetValue then
                 toastSizeControl:SetValue(ns.db.settings.toastSize or "medium", true)
@@ -385,7 +434,7 @@ function ns.UI.SettingsTab.Init(parent)
             if prevBtn then
                 btn:SetPoint("LEFT", prevBtn, "RIGHT", 6, 0)
             else
-                btn:SetPoint("TOPLEFT", 4, -390)
+                btn:SetPoint("TOPLEFT", 4, -500)
             end
             if not ns.CreateUIButton then
                 btn:SetSize(72, 24)
@@ -402,7 +451,7 @@ function ns.UI.SettingsTab.Init(parent)
     local toastEditBtn = ns.CreateUIButton and ns.CreateUIButton(child, {
         width = 160, height = 26, text = L["TOAST_EDIT_MODE"] or "Configure popup", variant = "primary",
     }) or CreateFrame("Button", nil, child, "UIPanelButtonTemplate")
-    toastEditBtn:SetPoint("TOPLEFT", 4, -422)
+    toastEditBtn:SetPoint("TOPLEFT", 4, -532)
     if not ns.CreateUIButton then
         toastEditBtn:SetSize(160, 26)
         toastEditBtn:SetText(L["TOAST_EDIT_MODE"] or "Configure popup")
@@ -433,14 +482,14 @@ function ns.UI.SettingsTab.Init(parent)
             end
         end)
     else
-        CreateCheckbox(child, L["SETTING_TOAST_CLICK_WHISPER"] or "Left-click toast to whisper (and dismiss)", -450,
+        CreateCheckbox(child, L["SETTING_TOAST_CLICK_WHISPER"] or "Left-click toast to whisper (and dismiss)", -560,
             function() return ns.db.settings.toastClickWhispers ~= false end,
             function(v) ns.db.settings.toastClickWhispers = v end)
     end
 
     -- Alert sound (lives with the popup section)
     local soundLabel = child:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    soundLabel:SetPoint("TOPLEFT", 4, -500)
+    soundLabel:SetPoint("TOPLEFT", 4, -610)
     soundLabel:SetTextColor(unpack(C.textMuted))
     soundLabel:SetText(L["SECTION_SOUND"] or "Alert sound")
 
@@ -463,7 +512,7 @@ function ns.UI.SettingsTab.Init(parent)
         end,
     })
     if soundDD then
-        soundDD:SetPoint("TOPLEFT", 4, -522)
+        soundDD:SetPoint("TOPLEFT", 4, -632)
         soundDD:SetOptions(SOUNDS)
         table.insert(settingsRefreshers, function()
             if ns.db and soundDD.SetValue then
@@ -472,15 +521,15 @@ function ns.UI.SettingsTab.Init(parent)
         end)
     end
 
-    Header(L["SECTION_REALM"] or "Realm compatibility", -560)
-    CreateCheckbox(child, L["SETTING_BLOCK_BAD_REALM"] or "Skip alerts when no owner shares the buyer's connected realm", -586,
+    Header(L["SECTION_REALM"] or "Realm compatibility", -670)
+    CreateCheckbox(child, L["SETTING_BLOCK_BAD_REALM"] or "Skip alerts when no owner shares the buyer's connected realm", -696,
         function() return ns.db.settings.blockIncompatibleRealmAlerts end,
         function(v) ns.db.settings.blockIncompatibleRealmAlerts = v end)
-    CreateCheckbox(child, L["SETTING_SMART_REALM"] or "Smart crafter: pick a realm-compatible owner for the whisper", -612,
+    CreateCheckbox(child, L["SETTING_SMART_REALM"] or "Smart crafter: pick a realm-compatible owner for the whisper", -722,
         function() return ns.db.settings.smartRealmCrafter ~= false end,
         function(v) ns.db.settings.smartRealmCrafter = v end)
     local realmHint = child:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    realmHint:SetPoint("TOPLEFT", 4, -638)
+    realmHint:SetPoint("TOPLEFT", 4, -748)
     realmHint:SetPoint("RIGHT", child, "RIGHT", -8, 0)
     realmHint:SetJustifyH("LEFT")
     realmHint:SetWordWrap(true)
@@ -494,7 +543,7 @@ function ns.UI.SettingsTab.Init(parent)
     ----------------------------------------------------------------------
     -- Chat channels
     ----------------------------------------------------------------------
-    Header(L["SECTION_CHANNELS"] or "Chat channels", -680)
+    Header(L["SECTION_CHANNELS"] or "Chat channels", -790)
     local CHANNEL_OPTS = {
         { key = "trade", label = L["CH_TRADE"] or "Trade" },
         { key = "services", label = L["CH_SERVICES"] or "Services" },
@@ -507,7 +556,7 @@ function ns.UI.SettingsTab.Init(parent)
         { key = "raid", label = L["CH_RAID"] or "Raid" },
         { key = "instance", label = L["CH_INSTANCE"] or "Instance" },
     }
-    local chY = -706
+    local chY = -816
     for _, opt in ipairs(CHANNEL_OPTS) do
         local key = opt.key
         CreateCheckbox(child, opt.label, chY,

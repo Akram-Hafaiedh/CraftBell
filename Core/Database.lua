@@ -67,6 +67,8 @@ local defaults = {
         soundEnabled = true,
         soundID = 11466,
         language = "en",
+        -- Trade-chat language on this realm (examples + default triggers). Not UI language.
+        chatLanguage = "en", -- en | fr | es
         minimapAngle = 225,
         keywordScanEnabled = true,
         dndEnabled = false,
@@ -249,6 +251,14 @@ local function InitializeDB()
     end
     ApplyDefaults(CraftBellDB, defaults)
     ns.db = CraftBellDB
+
+    -- UI language from settings (or client locale). Independent of chat keywords.
+    if ns.SetLanguage then
+        local code = ns.ResolveUILanguage and ns.ResolveUILanguage()
+            or (ns.db.settings and ns.db.settings.language)
+            or "en"
+        ns.SetLanguage(code)
+    end
 
     for recipeID, data in pairs(ns.db.trackedRecipes) do
         MigrateRecipeEntry(data)

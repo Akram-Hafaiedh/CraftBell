@@ -183,6 +183,26 @@ local function PickCompatibleOwner(recipeData)
     return assigned
 end
 
+local function RecipePlainLabel(data)
+    if not data then return "?" end
+    if data.recipeName and data.recipeName ~= "" then return data.recipeName end
+    if data.itemLink and ns.StripColorCodes then
+        return ns.StripColorCodes(data.itemLink)
+    end
+    return data.itemLink or "?"
+end
+
+--- Stable ordered list of { id, data } from a matches map.
+local function MatchesList(matches)
+    local list = {}
+    if not matches then return list end
+    for recipeID, data in pairs(matches) do
+        table.insert(list, { id = recipeID, data = data })
+    end
+    table.sort(list, function(a, b) return tostring(a.id) < tostring(b.id) end)
+    return list
+end
+
 local function BuildRecipeWhisper(recipeData)
     if not recipeData then return nil, false, false end
 
@@ -220,6 +240,86 @@ local function BuildRecipeWhisper(recipeData)
         playerName = UnitName("player"),
         characterName = recipeOwner,
         fee = ns.FormatFee(ns.GetRecipeFee(recipeData), { plain = true }),
+    })
+
+    return whisperMsg, isMismatched, isBlocked
+end
+
+--- Whisper for one or many matched recipes. Multi: all items in {item}, fee as "X each"
+--- when fees match (or per-item plain list when they differ).
+local function BuildMatchesWhisper(matches)
+    local list = MatchesList(matches)
+    if #list == 0 then return nil, false, false end
+    if #list == 1 then
+        return BuildRecipeWhisper(list[1].data)
+    end
+
+    local first = list[1].data
+    local currentPlayer = ns.GetPlayerFullName()
+    local owner = PickCompatibleOwner(first)
+    local recipeOwner = (owner and owner.fullName) or currentPlayer
+    local isCrossChar = recipeOwner ~= currentPlayer
+
+    local isMismatched = false
+    local isBlocked = false
+    if owner and owner.realm then
+        if not ns.IsRealmCompatible(owner.realm) then
+            isMismatched = true
+            isBlocked = (ns.db.settings.blockIncompatibleRealmAlerts == true)
+                or (ns.db.settings.realmMismatchMode == "block")
+        end
+    end
+    if isBlocked then
+        return nil, isMismatched, isBlocked
+    end
+
+    local items = {}
+    local fee0 = ns.GetRecipeFee(first)
+    local sameFee = true
+    for _, entry in ipairs(list) do
+        local d = entry.data
+        table.insert(items, d.itemLink or d.recipeName or "?")
+        if ns.GetRecipeFee(d) ~= fee0 then sameFee = false end
+    end
+    local itemStr = table.concat(items, ", ")
+
+    local feeStr
+    if sameFee then
+        local base = ns.FormatFee(fee0, { plain = true })
+        if base ~= "" then
+            feeStr = base .. " " .. (L["FEE_EACH"] or "each")
+        else
+            feeStr = ""
+        end
+    else
+        local parts = {}
+        for _, entry in ipairs(list) do
+            local d = entry.data
+            local f = ns.FormatFee(ns.GetRecipeFee(d), { plain = true })
+            local label = RecipePlainLabel(d)
+            if f ~= "" then
+                table.insert(parts, label .. " " .. f)
+            else
+                table.insert(parts, label)
+            end
+        end
+        feeStr = table.concat(parts, ", ")
+    end
+
+    local profession = first.tradeSkillLink or first.professionName or "Artisan"
+    local template
+    if isCrossChar and ns.db.crossCharTemplate and ns.db.crossCharTemplate ~= "" then
+        template = ns.db.crossCharTemplate
+    else
+        template = ns.db.messageTemplate
+    end
+
+    local whisperMsg = ns.FormatTemplate(template, {
+        profession = profession,
+        item = itemStr,
+        playerName = UnitName("player"),
+        characterName = recipeOwner,
+        fee = feeStr,
     })
 
     return whisperMsg, isMismatched, isBlocked
@@ -306,12 +406,15 @@ local function CreateExpandedFrame()
     expandedMessage:SetMaxLines(2)
 
     local recipeBtn = CreateFrame("Button", nil, expandedFrame)
-    recipeBtn:SetHeight(18)
+    recipeBtn:SetHeight(40)
     recipeBtn:SetPoint("TOPLEFT", expandedMessage, "BOTTOMLEFT", 0, -6)
     recipeBtn:SetPoint("TOPRIGHT", expandedMessage, "BOTTOMRIGHT", 0, -6)
     expandedRecipe = recipeBtn:CreateFontString(nil, "OVERLAY", "GameFontGreen")
     expandedRecipe:SetAllPoints()
     expandedRecipe:SetJustifyH("LEFT")
+    expandedRecipe:SetJustifyV("TOP")
+    expandedRecipe:SetWordWrap(true)
+    expandedRecipe:SetMaxLines(3)
     recipeBtn:SetScript("OnEnter", function()
         if currentFirstRecipeID then
             expandedRecipe:SetTextColor(0, 0.8, 1)
@@ -427,9 +530,13 @@ local function CreateToastFrame()
     toastSenderText:SetJustifyH("LEFT")
 
     toastRecipeText = toastFrame:CreateFontString(nil, "OVERLAY", preset.font2)
-    toastRecipeText:SetPoint("BOTTOMLEFT", toastIcon, "BOTTOMRIGHT", 10, 0)
-    toastRecipeText:SetPoint("RIGHT", toastFrame, "RIGHT", -12, 0)
+    toastRecipeText:SetPoint("TOPLEFT", toastSenderText, "BOTTOMLEFT", 0, -2)
+    toastRecipeText:SetPoint("BOTTOMRIGHT", toastFrame, "BOTTOMRIGHT", -12, 8)
     toastRecipeText:SetJustifyH("LEFT")
+    toastRecipeText:SetJustifyV("TOP")
+    toastRecipeText:SetWordWrap(true)
+    toastRecipeText:SetMaxLines(2)
+    toastRecipeText:SetNonSpaceWrap(false)
     toastRecipeText:SetTextColor(0.5, 1, 0.5)
 
     local hoverTex = toastFrame:CreateTexture(nil, "HIGHLIGHT")
@@ -652,37 +759,49 @@ function ns.ShowAlert(sender, message, matches)
     CreateExpandedFrame()
     currentSender = sender
 
-    local recipeNames = {}
+    local list = MatchesList(matches)
     local firstRecipeData, firstRecipeID = nil, nil
-    for recipeID, data in pairs(matches) do
+    local plainNames, linkNames = {}, {}
+    for _, entry in ipairs(list) do
         if not firstRecipeData then
-            firstRecipeData, firstRecipeID = data, recipeID
+            firstRecipeData, firstRecipeID = entry.data, entry.id
         end
-        table.insert(recipeNames, data.itemLink or data.recipeName)
+        table.insert(plainNames, RecipePlainLabel(entry.data))
+        table.insert(linkNames, entry.data.itemLink or entry.data.recipeName or "?")
     end
     currentFirstRecipeID = firstRecipeID
-    local recipeDisplay = table.concat(recipeNames, ", ")
+
+    -- Toast: plain names only (item links in one FontString overlap/clip badly)
+    local toastDisplay
+    if #plainNames <= 2 then
+        toastDisplay = table.concat(plainNames, ", ")
+    else
+        toastDisplay = string.format("%s, %s +%d", plainNames[1], plainNames[2], #plainNames - 2)
+    end
+    -- Expanded: one item per line so links stay readable
+    local expandedDisplay = table.concat(linkNames, "\n")
+    local historyDisplay = table.concat(plainNames, ", ")
 
     toastSenderText:SetText((L["TOAST_FROM"] or "From: ") .. sender)
-    toastRecipeText:SetText(recipeDisplay)
+    toastRecipeText:SetText(toastDisplay)
 
     expandedSender:SetText((L["ALERT_FROM"] or "From: ") .. sender)
     local displayMsg = #message > 150 and (message:sub(1, 147) .. "...") or message
     expandedMessage:SetText("|cffaaaaaa" .. displayMsg .. "|r")
-    expandedRecipe:SetText((L["ALERT_RECIPES"] or "Recipes: ") .. recipeDisplay)
+    expandedRecipe:SetText((L["ALERT_RECIPES"] or "Recipes: ") .. "\n" .. expandedDisplay)
 
     expandedWhisperBtn:SetText(L["WHISPER"] or "Whisper")
     expandedWhisperBtn:Show()
     expandedRealmNote:Hide()
 
-    local whisperMsg, isMismatched, isBlocked = BuildRecipeWhisper(firstRecipeData)
+    local whisperMsg, isMismatched, isBlocked = BuildMatchesWhisper(matches)
     currentWhisperMessage = whisperMsg
     if ns.DebugStep then
         ns.DebugStep("whisper", whisperMsg and whisperMsg ~= "",
             isBlocked and "blocked (realm)" or (whisperMsg and (#whisperMsg .. " chars") or "empty"))
     end
 
-    if isMismatched then
+    if isMismatched and firstRecipeData then
         local ownerView = ns.GetRecipeCharacterView and ns.GetRecipeCharacterView(firstRecipeData)
             or firstRecipeData.character
         local realmName = (ownerView and ownerView.realm) or "?"
@@ -700,7 +819,7 @@ function ns.ShowAlert(sender, message, matches)
         expandedWhisperPreview:SetText(whisperMsg and ("|cffff80b3" .. whisperMsg .. "|r") or "")
     end
 
-    local histEntry = ns.AddToHistory(sender, message, matches, recipeDisplay)
+    local histEntry = ns.AddToHistory(sender, message, matches, historyDisplay)
     currentHistoryEntry = histEntry
     if ns.DebugStep then
         ns.DebugStep("history", histEntry ~= nil,
@@ -890,7 +1009,11 @@ function ns.NotifyFromHistory(entry)
     local ok = SendWhisper(msg, entry.sender)
     if ok then
         ns.Print((L["MESSAGE_SENT_TO"] or "Message sent to ") .. entry.sender)
-        if ns.HistoryMarkDone then ns.HistoryMarkDone(entry) end
+        if ns.HistoryMarkDoneNotified then
+            ns.HistoryMarkDoneNotified(entry)
+        elseif ns.HistoryMarkDone then
+            ns.HistoryMarkDone(entry)
+        end
     else
         ns.Print(L["WHISPER_FAILED"] or "Whisper failed — check target name/realm or message length.")
     end

@@ -32,6 +32,13 @@ function ns.UI.KeywordsTab.Refresh()
     EnsureKeywords()
     ns.UI.ClearChildren(child)
 
+    local pack = (ns.GetChatLangPack and ns.GetChatLangPack()) or {
+        triggerExamples = "LF, WTB, Need...",
+        pairExample = 'LF JC neck  ->  left "JC, jewel"  /  right "neck, ring"',
+        phProf = "JC, jewelcrafting, jewel",
+        phItem = "neck, ring, back, cloak",
+        triggers = { "LF", "WTB", "Need", "LFC", "Seek" },
+    }
     local y = 0
     local function Header(text)
         if ns.CreateUISectionHeader then
@@ -122,7 +129,8 @@ function ns.UI.KeywordsTab.Refresh()
     y = y + 8
 
     Header(L["KEYWORDS_SECTION_TRIGGERS"] or "Triggers")
-    Hint(L["KEYWORDS_TRIGGER_HELP"] or "E.g.: LF, WTB, Need, Looking for… At least one trigger is required for keyword alerts.")
+    Hint((L["KEYWORDS_TRIGGER_HELP"] or "At least one trigger is required.")
+        .. "  " .. (L["KEYWORDS_EXAMPLE_PREFIX"] or "Example:") .. " " .. (pack.triggerExamples or ""))
 
     local trigInput = ns.CreateUIEditBox and ns.CreateUIEditBox(child, {
         height = 26, maxLetters = 40,
@@ -174,10 +182,10 @@ function ns.UI.KeywordsTab.Refresh()
         text:SetTextColor(unpack(C.text))
 
         local rm = ns.CreateUIButton and ns.CreateUIButton(row, {
-            width = 28, height = 20, text = "×", variant = "danger",
+            width = 28, height = 20, text = "x", variant = "danger",
         }) or CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
         rm:SetPoint("RIGHT", -6, 0)
-        if not ns.CreateUIButton then rm:SetSize(28, 20); rm:SetText("X") end
+        if not ns.CreateUIButton then rm:SetSize(28, 20); rm:SetText("x") end
         local idx = i
         rm:SetScript("OnClick", function()
             table.remove(ns.db.keywords.triggers, idx)
@@ -189,9 +197,12 @@ function ns.UI.KeywordsTab.Refresh()
 
     y = y + 10
 
-    Header(L["KEYWORDS_PAIRS_HEADER"] or "Profession–item pairs")
+    Header(L["KEYWORDS_PAIRS_HEADER"] or "Profession + item pairs")
     Hint(L["KEYWORDS_PAIRS_HELP"] or
-        "Each row links profession words to item words (comma-separated). Alert fires when a message has a word from both columns plus a trigger.")
+        "Alert when a message has a trigger and both sides of a row. Left = craft words, Right = item words (comma-separated).")
+    Hint((L["KEYWORDS_EXAMPLE_PREFIX"] or "Example:") .. " " .. (pack.pairExample or ""))
+    Hint(L["KEYWORDS_LANG_HINT"] or
+        "Type words as players write them in trade chat on this realm (see Settings > Trade chat language).")
 
     local pairsAdd = ns.CreateUIButton and ns.CreateUIButton(child, {
         width = 140, height = 26, text = L["KEYWORDS_PAIRS_ADD"] or "Add a pair", variant = "ghost",
@@ -202,32 +213,64 @@ function ns.UI.KeywordsTab.Refresh()
         pairsAdd:SetText(L["KEYWORDS_PAIRS_ADD"] or "Add a pair")
     end
     pairsAdd:SetScript("OnClick", function()
-        table.insert(ns.db.keywords.pairs, { professions = "", items = "" })
+        table.insert(ns.db.keywords.pairs, { professions = "", items = "", mode = "and" })
         FireKeywordsChanged()
         ns.UI.KeywordsTab.Refresh()
     end)
     y = y + 32
 
+    -- Column labels aligned with the two 180px inputs (no long text in the label)
+    local BOX_W, BOX_GAP, BOX_LEFT = 180, 8, 8
+    local colProf = child:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    colProf:SetPoint("TOPLEFT", BOX_LEFT, -y)
+    colProf:SetWidth(BOX_W)
+    colProf:SetJustifyH("LEFT")
+    colProf:SetWordWrap(false)
+    colProf:SetTextColor(unpack(C.textMuted))
+    colProf:SetText(L["KEYWORDS_PAIR_COL_PROF"] or "Profession words")
+    local colItem = child:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    colItem:SetPoint("TOPLEFT", BOX_LEFT + BOX_W + BOX_GAP, -y)
+    colItem:SetWidth(BOX_W)
+    colItem:SetJustifyH("LEFT")
+    colItem:SetWordWrap(false)
+    colItem:SetTextColor(unpack(C.textMuted))
+    colItem:SetText(L["KEYWORDS_PAIR_COL_ITEM"] or "Item words")
+    local colMode = child:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    colMode:SetPoint("TOPLEFT", BOX_LEFT + BOX_W + BOX_GAP + BOX_W + BOX_GAP, -y)
+    colMode:SetTextColor(unpack(C.textMuted))
+    colMode:SetText((L["KEYWORDS_PAIR_MODE_AND"] or "AND") .. " / " .. (L["KEYWORDS_PAIR_MODE_OR"] or "OR"))
+    y = y + 16
+
     for i, pair in ipairs(ns.db.keywords.pairs) do
+        if not pair.mode or (pair.mode ~= "and" and pair.mode ~= "or") then
+            pair.mode = "and"
+        end
         local row = ns.CreateUIRow and ns.CreateUIRow(child, 32)
             or CreateFrame("Frame", nil, child, "BackdropTemplate")
         row:SetPoint("TOPLEFT", 0, -y)
         row:SetPoint("TOPRIGHT", -4, -y)
         if row.SetHeight then row:SetHeight(32) end
 
-        local profBox = ns.CreateUIEditBox and ns.CreateUIEditBox(row, { height = 24, maxLetters = 200 })
-            or CreateFrame("EditBox", nil, row, "InputBoxTemplate")
-        profBox:SetSize(180, 24)
-        profBox:SetPoint("LEFT", 8, 0)
+        local MODE_W = 96
+        local profBox = ns.CreateUIEditBox and ns.CreateUIEditBox(row, {
+            height = 24, maxLetters = 200,
+            placeholder = pack.phProf or "JC, jewelcrafting, jewel",
+        }) or CreateFrame("EditBox", nil, row, "InputBoxTemplate")
+        profBox:SetSize(BOX_W, 24)
+        profBox:SetPoint("LEFT", BOX_LEFT, 0)
         profBox:SetAutoFocus(false)
         profBox:SetText(pair.professions or "")
+        if profBox.UpdatePlaceholder then profBox:UpdatePlaceholder() end
 
-        local itemBox = ns.CreateUIEditBox and ns.CreateUIEditBox(row, { height = 24, maxLetters = 200 })
-            or CreateFrame("EditBox", nil, row, "InputBoxTemplate")
-        itemBox:SetSize(180, 24)
-        itemBox:SetPoint("LEFT", profBox, "RIGHT", 8, 0)
+        local itemBox = ns.CreateUIEditBox and ns.CreateUIEditBox(row, {
+            height = 24, maxLetters = 200,
+            placeholder = pack.phItem or "neck, ring, back, cloak",
+        }) or CreateFrame("EditBox", nil, row, "InputBoxTemplate")
+        itemBox:SetSize(BOX_W, 24)
+        itemBox:SetPoint("LEFT", profBox, "RIGHT", BOX_GAP, 0)
         itemBox:SetAutoFocus(false)
         itemBox:SetText(pair.items or "")
+        if itemBox.UpdatePlaceholder then itemBox:UpdatePlaceholder() end
 
         local idx = i
         local function SavePair()
@@ -237,16 +280,56 @@ function ns.UI.KeywordsTab.Refresh()
                 FireKeywordsChanged()
             end
         end
-        profBox:SetScript("OnEnterPressed", function(self) SavePair(); self:ClearFocus() end)
-        profBox:SetScript("OnEditFocusLost", SavePair)
-        itemBox:SetScript("OnEnterPressed", function(self) SavePair(); self:ClearFocus() end)
-        itemBox:SetScript("OnEditFocusLost", SavePair)
+        profBox:HookScript("OnEnterPressed", function(self) SavePair(); self:ClearFocus() end)
+        profBox:HookScript("OnEditFocusLost", function() SavePair() end)
+        itemBox:HookScript("OnEnterPressed", function(self) SavePair(); self:ClearFocus() end)
+        itemBox:HookScript("OnEditFocusLost", function() SavePair() end)
+
+        local modeVal = pair.mode or "and"
+        local modeCtrl
+        if ns.CreateUISegmented then
+            modeCtrl = ns.CreateUISegmented(row, {
+                width = MODE_W,
+                height = 22,
+                options = {
+                    { value = "and", label = L["KEYWORDS_PAIR_MODE_AND"] or "AND" },
+                    { value = "or",  label = L["KEYWORDS_PAIR_MODE_OR"] or "OR" },
+                },
+                value = modeVal,
+                onChange = function(v)
+                    if ns.db.keywords.pairs[idx] then
+                        ns.db.keywords.pairs[idx].mode = (v == "or") and "or" or "and"
+                        FireKeywordsChanged()
+                    end
+                end,
+            })
+            modeCtrl:SetPoint("LEFT", itemBox, "RIGHT", BOX_GAP, 0)
+        else
+            modeCtrl = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+            modeCtrl:SetSize(MODE_W, 22)
+            modeCtrl:SetPoint("LEFT", itemBox, "RIGHT", BOX_GAP, 0)
+            modeCtrl:SetText(string.upper(modeVal))
+            modeCtrl:SetScript("OnClick", function(self)
+                local pr = ns.db.keywords.pairs[idx]
+                if not pr then return end
+                pr.mode = (pr.mode == "or") and "and" or "or"
+                self:SetText(string.upper(pr.mode))
+                FireKeywordsChanged()
+            end)
+        end
+        modeCtrl:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_TOP")
+            GameTooltip:AddLine(L["KEYWORDS_PAIR_MODE_TIP"] or
+                "AND = both sides required. OR = either side is enough.", 1, 1, 1, true)
+            GameTooltip:Show()
+        end)
+        modeCtrl:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
         local rm = ns.CreateUIButton and ns.CreateUIButton(row, {
-            width = 28, height = 20, text = "×", variant = "danger",
+            width = 28, height = 20, text = "x", variant = "danger",
         }) or CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
         rm:SetPoint("RIGHT", -6, 0)
-        if not ns.CreateUIButton then rm:SetSize(28, 20); rm:SetText("X") end
+        if not ns.CreateUIButton then rm:SetSize(28, 20); rm:SetText("x") end
         rm:SetScript("OnClick", function()
             table.remove(ns.db.keywords.pairs, idx)
             FireKeywordsChanged()
@@ -311,10 +394,10 @@ function ns.UI.KeywordsTab.Refresh()
         text:SetTextColor(unpack(C.text))
 
         local rm = ns.CreateUIButton and ns.CreateUIButton(row, {
-            width = 28, height = 20, text = "×", variant = "danger",
+            width = 28, height = 20, text = "x", variant = "danger",
         }) or CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
         rm:SetPoint("RIGHT", -6, 0)
-        if not ns.CreateUIButton then rm:SetSize(28, 20); rm:SetText("X") end
+        if not ns.CreateUIButton then rm:SetSize(28, 20); rm:SetText("x") end
         local idx = i
         rm:SetScript("OnClick", function()
             table.remove(ns.db.keywords.freewords, idx)
@@ -337,7 +420,10 @@ function ns.UI.KeywordsTab.Refresh()
     resetBtn:SetScript("OnClick", function()
         wipe(ns.db.keywords.pairs)
         wipe(ns.db.keywords.freewords)
-        ns.db.keywords.triggers = { "LF", "WTB", "Need", "LFC", "Seek" }
+        local def = (ns.GetChatLangPack and ns.GetChatLangPack().triggers)
+            or { "LF", "WTB", "Need", "LFC", "Seek" }
+        ns.db.keywords.triggers = {}
+        for _, w in ipairs(def) do table.insert(ns.db.keywords.triggers, w) end
         FireKeywordsChanged()
         ns.UI.KeywordsTab.Refresh()
         ns.Print(L["KEYWORDS_RESET"] or "Keywords reset.")

@@ -107,9 +107,11 @@ local function RebuildKeywordCache()
         table.insert(keywordCache.triggers, ns.StripAccents(word:lower()))
     end
     for _, pair in ipairs(ns.db.keywords.pairs or {}) do
+        local mode = (pair.mode == "or") and "or" or "and"
         table.insert(keywordCache.pairs, {
             professions = SplitCSV(pair.professions or ""),
             items = SplitCSV(pair.items or ""),
+            mode = mode,
         })
     end
     for _, word in ipairs(ns.db.keywords.freewords or {}) do
@@ -230,7 +232,9 @@ local function ScanKeywords(message, sender, event)
     end
     if #matchedTriggers == 0 then return end
 
+    -- Pair modes: "and" = left+right both required (default); "or" = either side enough
     local matchedProfession, matchedItem
+    local pairMatched = false
     for _, pair in ipairs(keywordCache.pairs) do
         local foundProf, foundItem
         for _, prof in ipairs(pair.professions) do
@@ -239,22 +243,28 @@ local function ScanKeywords(message, sender, event)
                 break
             end
         end
-        if foundProf then
-            for _, item in ipairs(pair.items) do
-                if string.find(normalizedMsg, item, 1, true) then
-                    foundItem = item
-                    break
-                end
+        for _, item in ipairs(pair.items) do
+            if string.find(normalizedMsg, item, 1, true) then
+                foundItem = item
+                break
             end
         end
-        if foundProf and foundItem then
+        local mode = pair.mode or "and"
+        local matched
+        if mode == "or" then
+            matched = foundProf or foundItem
+        else
+            matched = foundProf and foundItem
+        end
+        if matched then
             matchedProfession, matchedItem = foundProf, foundItem
+            pairMatched = true
             break
         end
     end
 
     local matchedFreeword
-    if not matchedProfession then
+    if not pairMatched then
         for _, word in ipairs(keywordCache.freewords) do
             if string.find(normalizedMsg, word, 1, true) then
                 matchedFreeword = word
@@ -263,7 +273,7 @@ local function ScanKeywords(message, sender, event)
         end
     end
 
-    if not matchedProfession and not matchedFreeword then return end
+    if not pairMatched and not matchedFreeword then return end
 
     local spamKey = sender .. ":kw"
     local now = GetTime()
@@ -287,6 +297,25 @@ end
 -- Chat event handler
 ----------------------------------------------------------------------
 local scanFrame = CreateFrame("Frame")
+
+----------------------------------------------------------------------
+-- Whisper log (independent of trade scan channel filters)
+----------------------------------------------------------------------
+local whisperFrame = CreateFrame("Frame")
+whisperFrame:RegisterEvent("CHAT_MSG_WHISPER")
+whisperFrame:RegisterEvent("CHAT_MSG_WHISPER_INFORM")
+whisperFrame:SetScript("OnEvent", function(_, event, message, sender)
+    if not ns.RecordWhisper then return end
+    if message ~= nil and CanAccessChatText and not CanAccessChatText(message) then return end
+    if event == "CHAT_MSG_WHISPER" then
+        -- Incoming: other player -> you
+        ns.RecordWhisper(sender, message, "in")
+    elseif event == "CHAT_MSG_WHISPER_INFORM" then
+        -- Outgoing: you -> other (sender is the target)
+        ns.RecordWhisper(sender, message, "out")
+    end
+end)
+
 
 --- Map CHAT_MSG_* / channel base name → settings.chatChannels key
 local function ChannelAllowed(event, channelBaseName)

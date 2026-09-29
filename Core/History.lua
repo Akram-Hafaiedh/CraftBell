@@ -182,15 +182,24 @@ function ns.HistoryMarkContacted(entry)
     ns.FireCallback("HISTORY_UPDATED")
 end
 
+--- Mark done without sending a whisper. notified stays false unless already set.
 function ns.HistoryMarkDone(entry)
     if not entry then return end
     if entry.status == "done" then return end
     entry.status = "done"
-    entry.notified = true
     entry.replied = true
+    -- Do NOT set notified=true here — that means "ready whisper was sent"
     entry.characterCompleted = ns.GetPlayerFullName and ns.GetPlayerFullName() or UnitName("player")
     entry.timeCompleted = time()
     BumpStat(entry, "completed")
+    ns.FireCallback("HISTORY_UPDATED")
+end
+
+--- Mark done after a successful Ready/notify whisper.
+function ns.HistoryMarkDoneNotified(entry)
+    if not entry then return end
+    ns.HistoryMarkDone(entry)
+    entry.notified = true
     ns.FireCallback("HISTORY_UPDATED")
 end
 
@@ -338,3 +347,76 @@ end
 ns.RegisterCallback("DB_READY", function()
     ns.BindHistoryDB()
 end)
+
+----------------------------------------------------------------------
+-- Whisper conversation log (local SavedVariables only)
+-- Used so History can show the back-and-forth with a buyer.
+----------------------------------------------------------------------
+local MAX_WHISPER_PARTNERS = 40
+local MAX_WHISPERS_PER_PARTNER = 80
+
+local function NormalizeWhisperKey(name)
+    if not name or name == "" then return nil end
+    name = tostring(name)
+    -- Strip realm color codes / spaces
+    if ns.ChatSafeText then name = ns.ChatSafeText(name) end
+    name = name:match("^%s*(.-)%s*$") or name
+    return name:lower()
+end
+
+local function EnsureWhisperDB()
+    if not ns.db then return nil end
+    ns.db.whisperLogs = ns.db.whisperLogs or {}
+    return ns.db.whisperLogs
+end
+
+--- dir: "in" (they whispered you) | "out" (you whispered them)
+function ns.RecordWhisper(partnerName, text, dir)
+    local key = NormalizeWhisperKey(partnerName)
+    if not key or not text or text == "" then return end
+    local logs = EnsureWhisperDB()
+    if not logs then return end
+
+    local list = logs[key]
+    if not list then
+        -- Cap partner count
+        local n = 0
+        for _ in pairs(logs) do n = n + 1 end
+        if n >= MAX_WHISPER_PARTNERS then
+            local oldestKey, oldestT = nil, nil
+            for k, msgs in pairs(logs) do
+                local last = msgs[#msgs]
+                local t = last and last.t or 0
+                if not oldestT or t < oldestT then
+                    oldestT, oldestKey = t, k
+                end
+            end
+            if oldestKey then logs[oldestKey] = nil end
+        end
+        list = {}
+        logs[key] = list
+    end
+
+    table.insert(list, {
+        t = time(),
+        dir = (dir == "out") and "out" or "in",
+        text = tostring(text):sub(1, 255),
+    })
+    while #list > MAX_WHISPERS_PER_PARTNER do
+        table.remove(list, 1)
+    end
+end
+
+--- Messages exchanged with this player (newest last). Optional sinceTs filter.
+function ns.GetWhisperLog(partnerName, sinceTs)
+    local key = NormalizeWhisperKey(partnerName)
+    local logs = ns.db and ns.db.whisperLogs
+    if not key or not logs or not logs[key] then return {} end
+    local out = {}
+    for _, m in ipairs(logs[key]) do
+        if not sinceTs or (m.t and m.t >= sinceTs) then
+            table.insert(out, m)
+        end
+    end
+    return out
+end

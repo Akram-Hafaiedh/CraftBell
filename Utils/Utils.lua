@@ -194,6 +194,109 @@ function ns.NormalizeString(str)
     return ns.StripAccents(string.lower(ns.StripColorCodes(str)))
 end
 
+----------------------------------------------------------------------
+-- UI language (independent of client GetLocale / realm language)
+-- Keywords you type are never translated — only window labels use ns.L.
+----------------------------------------------------------------------
+local function NormalizeLangCode(code)
+    if not code or code == "" then return "en" end
+    code = tostring(code):lower()
+    if code == "fr" or code == "frfr" then return "fr" end
+    if code == "es" or code == "eses" or code == "esmx" then return "es" end
+    if code == "en" or code == "enus" or code == "engb" then return "en" end
+    return "en"
+end
+
+--- Apply addon UI language. Does not change keyword lists or chat matching.
+function ns.SetLanguage(code)
+    code = NormalizeLangCode(code)
+    ns.L = ns.L or {}
+    ns.Locales = ns.Locales or {}
+
+    -- Always start from English base so switching fr → es does not leave orphans
+    if ns.Locales.en then
+        for k, v in pairs(ns.Locales.en) do
+            ns.L[k] = v
+        end
+    end
+    if code ~= "en" and ns.Locales[code] then
+        for k, v in pairs(ns.Locales[code]) do
+            ns.L[k] = v
+        end
+    end
+    if ns.db and ns.db.settings then
+        ns.db.settings.language = code
+    end
+    return code
+end
+
+--- Resolve initial UI language: saved setting, else client locale, else English.
+function ns.ResolveUILanguage()
+    if ns.db and ns.db.settings and ns.db.settings.language then
+        return NormalizeLangCode(ns.db.settings.language)
+    end
+    local client = GetLocale and GetLocale() or "enUS"
+    if client == "frFR" then return "fr" end
+    if client == "esES" or client == "esMX" then return "es" end
+    return "en"
+end
+
+----------------------------------------------------------------------
+-- Trade-chat language packs (examples + default triggers only).
+-- This is NOT the addon UI language. English UI + French realm is normal.
+----------------------------------------------------------------------
+local CHAT_LANG_PACKS = {
+    en = {
+        triggers = { "LF", "WTB", "Need", "LFC", "Seek" },
+        triggerExamples = "LF, WTB, Need, Looking for...",
+        pairExample = 'LF JC neck  ->  left "JC, jewel"  /  right "neck, ring"',
+        phProf = "JC, jewelcrafting, jewel",
+        phItem = "neck, ring, back, cloak",
+    },
+    fr = {
+        triggers = { "LF", "WTB", "Cherche", "Besoin", "RCD" },
+        triggerExamples = "LF, WTB, Cherche, Besoin...",
+        pairExample = 'LF JC cou  ->  gauche "JC, joa"  /  droite "cou, cape"',
+        phProf = "JC, joaillerie, joa",
+        phItem = "cou, collier, cape",
+    },
+    es = {
+        triggers = { "LF", "WTB", "Busco", "Necesito", "LFC" },
+        triggerExamples = "LF, WTB, Busco, Necesito...",
+        pairExample = 'LF JC cuello  ->  izq. "JC, joy"  /  der. "cuello, capa"',
+        phProf = "JC, joyeria, joy",
+        phItem = "cuello, collar, capa",
+    },
+}
+
+local function NormalizeChatLang(code)
+    if not code or code == "" then return "en" end
+    code = tostring(code):lower()
+    if code == "fr" or code == "frfr" then return "fr" end
+    if code == "es" or code == "eses" or code == "esmx" then return "es" end
+    return "en"
+end
+
+function ns.GetChatLanguage()
+    local code = ns.db and ns.db.settings and ns.db.settings.chatLanguage
+    return NormalizeChatLang(code)
+end
+
+--- Examples + default triggers for the selected trade-chat language.
+function ns.GetChatLangPack()
+    local code = ns.GetChatLanguage and ns.GetChatLanguage() or "en"
+    return CHAT_LANG_PACKS[code] or CHAT_LANG_PACKS.en
+end
+
+function ns.SetChatLanguage(code)
+    code = NormalizeChatLang(code)
+    if ns.db and ns.db.settings then
+        ns.db.settings.chatLanguage = code
+    end
+    return code
+end
+
+
 -- Extract numeric IDs from WoW hyperlinks in a raw chat message.
 -- Returns { [numericID] = linkType, ... }, e.g. { [12345] = "item" }
 function ns.ExtractLinkIDs(str)

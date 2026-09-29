@@ -7,6 +7,28 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Planned
 
+## [0.1.5] — 2026-09-29
+
+### Added
+- **Trade chat language** setting (independent of UI language): drives keyword examples, placeholders, and default triggers (EN / FR / ES packs).
+- **Pair match mode** per profession–item row: **AND** (both sides) or **OR** (either side); default AND.
+- Edit-box **placeholders** for pair fields (realm-language examples).
+- History **Mark done** — closes the row without sending the Ready/notify whisper.
+- History **Conversation** — local whisper log with that buyer only (in + out while CraftBell is loaded).
+- Multi-recipe alerts: whisper lists **all** matched items; fee shows **each** when fees match.
+- `HistoryMarkDoneNotified` for Ready path (done + notified).
+
+### Changed
+- Keyword pair copy/examples use ASCII only (no broken `[]` glyphs).
+- UI language hint clarified: labels only; keywords stay independent.
+- Toast multi-item display uses plain names (no overlapping item links); expanded panel lists one item per line.
+- Ready still sends notify; Mark done is silent.
+
+### Fixed
+- Settings / Keywords (and hardened other tabs) **scroll range** so bottom content is reachable (dynamic scroll-child height).
+- Pair column labels no longer overlap; real placeholders on empty fields.
+- Whisper / assign / track chat lines: texture escapes stripped via `ChatSafeText` (empty icon boxes).
+
 ## [0.1.4] — 2026-09-28
 
 ### Added
