@@ -111,6 +111,31 @@ SlashCmdList["CRAFTBELL"] = function(msg)
             ns.Print("Debug window not available.")
         end
 
+    elseif msg == "testsound" or msg:match("^testsound ") then
+        local arg = msg:match("^testsound%s+(.+)$")
+        if arg == "all" then
+            ns.Print("Playing all alert sounds…")
+            local delay = 0
+            for _, s in ipairs(ns.ALERT_SOUNDS or {}) do
+                if s.value and s.value > 0 then
+                    local id, label = s.value, s.label
+                    C_Timer.After(delay, function()
+                        if ns.PreviewAlertSound then ns.PreviewAlertSound(id, label) end
+                    end)
+                    delay = delay + 1.0
+                end
+            end
+        elseif arg and tonumber(arg) then
+            if ns.PreviewAlertSound then ns.PreviewAlertSound(tonumber(arg)) end
+        else
+            local id = ns.db and ns.db.settings and ns.db.settings.soundID
+            if ns.PreviewAlertSound then
+                ns.PreviewAlertSound(id)
+            else
+                ns.Print("Sound preview not available.")
+            end
+        end
+
     elseif msg == "history clear" or msg == "clear history" then
         if ns.HistoryClear then
             ns.HistoryClear()
@@ -208,7 +233,8 @@ SlashCmdList["CRAFTBELL"] = function(msg)
         ns.Print("  /cb clear | clear prof | clear all — reset tracked recipes")
         ns.Print("  /cb toast — drag alert popup position")
         ns.Print("  /cb test / testcross / focus / debug")
-        ns.Print("  /cb debugwin — open debug window (self-test is inside)")
+        ns.Print("  /cb debugwin — open debug window (self-test + sound test)")
+        ns.Print("  /cb testsound [all|id] — preview alert sound")
         ns.Print("  /cb history clear — wipe history queue")
         ns.Print("  /cb history clear tests — remove CBSelfTest / TestBuyer rows")
         ns.Print("  /cb history clear stats — reset completed/rejected/skipped counters")

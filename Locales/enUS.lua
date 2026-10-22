@@ -172,6 +172,7 @@ L["IMPORT_OK"] = "Config imported."
 L["IMPORT_FAILED"] = "Import failed — invalid data."
 
 L["SETTING_CURRENT_CHAR_ONLY"] = "Alerts only for this character (assigned crafter)"
+L["SETTING_SOUND_CHOICE"] = "Sound:"
 L["SETTING_SOUND"] = "Play sound on alert"
 L["SETTING_KEYWORD_SCAN"] = "Scan for keyword matches"
 L["SETTING_DND"] = "Do Not Disturb (pause scanning)"
@@ -318,3 +319,8 @@ ns.Locales.en = {}
 for k, v in pairs(ns.L) do
     ns.Locales.en[k] = v
 end
+
+L["SETTING_SOUND_CHANNEL"] = "Audio channel:"
+L["SETTING_SOUND_CHANNEL_HINT"] = "Which volume slider controls the alert. Master is recommended (heard even if Effects is low). Only change this if you know you want alerts on SFX/Dialog instead."
+L["BTN_PREVIEW_ALERT"] = "Preview alert"
+L["BTN_PREVIEW_ALERT_TIP"] = "Shows the alert popup and plays the sound — does not add a History row."

@@ -5,7 +5,7 @@ local L = ns.L
 -- Debug subsystem
 -- - Ring buffer log (feeds window + optional chat via ns.Debug)
 -- - Step checklist for synthetic self-test and live alerts
--- - Debug window: checklist + log + Copy / Clear / Run self-test
+-- - Debug window: checklist + log + sound test + Copy / Clear / Run self-test
 ----------------------------------------------------------------------
 
 local MAX_LOG = 250
@@ -90,6 +90,56 @@ function ns.ClearDebugLog()
     if debugFrame and debugFrame:IsShown() and debugFrame.RefreshLog then
         debugFrame:RefreshLog()
     end
+end
+
+
+----------------------------------------------------------------------
+-- Alert sound helpers (shared with Settings preview)
+----------------------------------------------------------------------
+ns.ALERT_SOUNDS = {
+    { value = 8959,  label = "Raid Warning" },
+    { value = 8960,  label = "Ready Check" },
+    { value = 31579, label = "Bonus Roll" },
+    { value = 8459,  label = "PvP Flag" },
+    { value = 5274,  label = "Auction House" },
+    { value = 888,   label = "Level Up" },
+    { value = 31578, label = "Epic Loot" },
+    { value = 3175,  label = "Map Ping" },
+    { value = 18871, label = "Alarm Clock" },
+    { value = 0,     label = "None" },
+}
+
+function ns.GetAlertSoundOptions()
+    return ns.ALERT_SOUNDS
+end
+
+function ns.PreviewAlertSound(soundID, label)
+    soundID = tonumber(soundID)
+    if soundID == nil then
+        soundID = (ns.db and ns.db.settings and ns.db.settings.soundID) or 8959
+    end
+    if not label then
+        for _, s in ipairs(ns.ALERT_SOUNDS) do
+            if s.value == soundID then
+                label = s.label
+                break
+            end
+        end
+        label = label or ("kit " .. tostring(soundID))
+    end
+    if soundID <= 0 then
+        local msg = "Sound: None (silent)"
+        if ns.DebugLog then ns.DebugLog(msg) end
+        ns.Print(msg)
+        return false
+    end
+    local channel = (ns.db and ns.db.settings and ns.db.settings.soundChannel) or "Master"
+    local ok, err = pcall(PlaySound, soundID, channel)
+    local msg = string.format("Sound: %s (id %d, %s) %s",
+        label, soundID, channel, ok and "played" or ("FAILED: " .. tostring(err)))
+    if ns.DebugLog then ns.DebugLog(msg) end
+    ns.Print(msg)
+    return ok and true or false
 end
 
 ----------------------------------------------------------------------
@@ -306,7 +356,7 @@ local function EnsureDebugFrame()
     if debugFrame then return debugFrame end
 
     local f = CreateFrame("Frame", "CraftBellDebugFrame", UIParent, "BackdropTemplate")
-    f:SetSize(560, 480)
+    f:SetSize(560, 520)
     f:SetPoint("CENTER")
     f:SetFrameStrata("DIALOG")
     f:SetClampedToScreen(true)
@@ -359,7 +409,7 @@ local function EnsureDebugFrame()
 
     local checkScroll = CreateFrame("ScrollFrame", nil, f, "UIPanelScrollFrameTemplate")
     checkScroll:SetPoint("TOPLEFT", 12, -60)
-    checkScroll:SetPoint("BOTTOMLEFT", 12, 52)
+    checkScroll:SetPoint("BOTTOMLEFT", 12, 88)
     checkScroll:SetWidth(240)
 
     local checkChild = CreateFrame("Frame", nil, checkScroll)
@@ -376,7 +426,7 @@ local function EnsureDebugFrame()
 
     local logScroll = CreateFrame("ScrollFrame", nil, f, "UIPanelScrollFrameTemplate")
     logScroll:SetPoint("TOPLEFT", checkScroll, "TOPRIGHT", 24, 0)
-    logScroll:SetPoint("BOTTOMRIGHT", -36, 52)
+    logScroll:SetPoint("BOTTOMRIGHT", -36, 88)
 
     local logEdit = CreateFrame("EditBox", nil, logScroll)
     logEdit:SetMultiLine(true)
@@ -450,6 +500,56 @@ local function EnsureDebugFrame()
         ns.ClearDebugLog()
         ns.Print("Debug log cleared.")
     end)
+
+    -- Sound test row
+    local soundCurrentBtn = MakeBtn("Test sound", "ghost", 100)
+    soundCurrentBtn:SetPoint("BOTTOMLEFT", 16, 48)
+    soundCurrentBtn:SetScript("OnClick", function()
+        local id = ns.db and ns.db.settings and ns.db.settings.soundID
+        ns.PreviewAlertSound(id)
+    end)
+    soundCurrentBtn:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_TOP")
+        GameTooltip:AddLine("Play the sound currently selected in Settings", 1, 1, 1, true)
+        local id = ns.db and ns.db.settings and ns.db.settings.soundID
+        GameTooltip:AddLine("soundID = " .. tostring(id or 8959), 0.6, 0.6, 0.65)
+        GameTooltip:Show()
+    end)
+    soundCurrentBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+    local soundAllBtn = MakeBtn("Preview all", "ghost", 100)
+    soundAllBtn:SetPoint("LEFT", soundCurrentBtn, "RIGHT", 8, 0)
+    soundAllBtn:SetScript("OnClick", function()
+        ns.Print("Playing all alert sounds (1s apart)…")
+        ns.DebugLog("── Sound preview all ──")
+        local delay = 0
+        for _, s in ipairs(ns.ALERT_SOUNDS or {}) do
+            if s.value and s.value > 0 then
+                local id, label = s.value, s.label
+                C_Timer.After(delay, function()
+                    ns.PreviewAlertSound(id, label)
+                end)
+                delay = delay + 1.0
+            end
+        end
+    end)
+
+    if ns.CreateUIDropdown then
+        local soundDD = ns.CreateUIDropdown(f, {
+            width = 150, height = 26, placeholder = "Pick sound…",
+            onSelect = function(value, label)
+                if ns.db and ns.db.settings and value ~= nil then
+                    ns.db.settings.soundID = value
+                end
+                ns.PreviewAlertSound(value, label)
+            end,
+        })
+        soundDD:SetPoint("LEFT", soundAllBtn, "RIGHT", 8, 0)
+        soundDD:SetOptions(ns.ALERT_SOUNDS or {})
+        local cur = ns.db and ns.db.settings and ns.db.settings.soundID
+        if cur and soundDD.SetValue then soundDD:SetValue(cur, true) end
+        f.soundDD = soundDD
+    end
 
     local debugToggle = MakeBtn("Debug ON", "ghost", 90)
     debugToggle:SetPoint("BOTTOMRIGHT", -16, 14)

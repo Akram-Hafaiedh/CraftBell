@@ -352,37 +352,28 @@ function ns.UI.SettingsTab.Init(parent)
         "Language of trade chat on this realm. Controls keyword examples and default triggers. Not the addon UI language.")
 
     Header(L["SECTION_GENERAL"] or "General", -180)
-    CreateCheckbox(child, L["SETTING_SOUND"] or "Play sound on alert", -206,
-        function() return ns.db.settings.soundEnabled end,
-        function(v) ns.db.settings.soundEnabled = v end)
-    CreateCheckbox(child, L["SETTING_KEYWORD_SCAN"] or "Scan for keyword matches", -232,
+    CreateCheckbox(child, L["SETTING_KEYWORD_SCAN"] or "Scan for keyword matches", -206,
         function() return ns.db.settings.keywordScanEnabled end,
         function(v) ns.db.settings.keywordScanEnabled = v end)
-    CreateCheckbox(child, L["SETTING_DND"] or "Do Not Disturb (pause scanning)", -258,
+    CreateCheckbox(child, L["SETTING_DND"] or "Do Not Disturb (pause scanning)", -232,
         function() return ns.db.settings.dndEnabled end,
         function(v) ns.db.settings.dndEnabled = v end)
-    CreateCheckbox(child, L["SETTING_CURRENT_CHAR_ONLY"] or "Alerts only for this character (assigned crafter)", -284,
+    CreateCheckbox(child, L["SETTING_CURRENT_CHAR_ONLY"] or "Alerts only for this character (assigned crafter)", -258,
         function() return ns.db.settings.alertsCurrentCharOnly end,
         function(v) ns.db.settings.alertsCurrentCharOnly = v end)
-    CreateCheckbox(child, L["SETTING_QUIET_MODE"] or "Quiet mode (mute game sound during alerts)", -310,
-        function() return ns.db.settings.quietModeEnabled end,
-        function(v)
-            ns.db.settings.quietModeEnabled = v
-            if ns.SetFocusMode then ns.SetFocusMode(v) end
-        end)
 
     ----------------------------------------------------------------------
     -- Bulk track (Track All button / /cb bulk)
     ----------------------------------------------------------------------
-    Header(L["SECTION_BULK"] or "Bulk track", -346)
-    CreateCheckbox(child, L["BULK_OPT_ORDERS"] or "Orders only (Crafting Orders table)", -372,
+    Header(L["SECTION_BULK"] or "Bulk track", -294)
+    CreateCheckbox(child, L["BULK_OPT_ORDERS"] or "Orders only (Crafting Orders table)", -320,
         function() return ns.db.settings.bulkTrackOrdersOnly ~= false end,
         function(v) ns.db.settings.bulkTrackOrdersOnly = v end)
-    CreateCheckbox(child, L["BULK_OPT_LEARNED"] or "Learned only", -398,
+    CreateCheckbox(child, L["BULK_OPT_LEARNED"] or "Learned only", -346,
         function() return ns.db.settings.bulkTrackLearnedOnly end,
         function(v) ns.db.settings.bulkTrackLearnedOnly = v end)
     local bulkScopeHint = child:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    bulkScopeHint:SetPoint("TOPLEFT", 4, -424)
+    bulkScopeHint:SetPoint("TOPLEFT", 4, -372)
     bulkScopeHint:SetPoint("RIGHT", child, "RIGHT", -8, 0)
     bulkScopeHint:SetJustifyH("LEFT")
     bulkScopeHint:SetWordWrap(true)
@@ -391,12 +382,12 @@ function ns.UI.SettingsTab.Init(parent)
         "Expansion scope: /cb exp list · /cb exp add <id> · /cb exp clear")
 
     ----------------------------------------------------------------------
-    -- Toast size + position + sound
+    -- Toast size + position
     ----------------------------------------------------------------------
-    Header(L["SECTION_TOAST"] or "Alert popup", -460)
+    Header(L["SECTION_TOAST"] or "Alert popup", -408)
 
     local toastSizeLabel = child:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    toastSizeLabel:SetPoint("TOPLEFT", 4, -480)
+    toastSizeLabel:SetPoint("TOPLEFT", 4, -428)
     toastSizeLabel:SetTextColor(unpack(C.textMuted))
     toastSizeLabel:SetText(L["TOAST_SIZE_LABEL"] or "Popup size:")
 
@@ -418,7 +409,7 @@ function ns.UI.SettingsTab.Init(parent)
                 if ns.ApplyToastSize then ns.ApplyToastSize(value) end
             end,
         })
-        toastSizeControl:SetPoint("TOPLEFT", 4, -500)
+        toastSizeControl:SetPoint("TOPLEFT", 4, -448)
         table.insert(settingsRefreshers, function()
             if ns.db and toastSizeControl.SetValue then
                 toastSizeControl:SetValue(ns.db.settings.toastSize or "medium", true)
@@ -434,7 +425,7 @@ function ns.UI.SettingsTab.Init(parent)
             if prevBtn then
                 btn:SetPoint("LEFT", prevBtn, "RIGHT", 6, 0)
             else
-                btn:SetPoint("TOPLEFT", 4, -500)
+                btn:SetPoint("TOPLEFT", 4, -448)
             end
             if not ns.CreateUIButton then
                 btn:SetSize(72, 24)
@@ -451,7 +442,7 @@ function ns.UI.SettingsTab.Init(parent)
     local toastEditBtn = ns.CreateUIButton and ns.CreateUIButton(child, {
         width = 160, height = 26, text = L["TOAST_EDIT_MODE"] or "Configure popup", variant = "primary",
     }) or CreateFrame("Button", nil, child, "UIPanelButtonTemplate")
-    toastEditBtn:SetPoint("TOPLEFT", 4, -532)
+    toastEditBtn:SetPoint("TOPLEFT", 4, -480)
     if not ns.CreateUIButton then
         toastEditBtn:SetSize(160, 26)
         toastEditBtn:SetText(L["TOAST_EDIT_MODE"] or "Configure popup")
@@ -482,54 +473,138 @@ function ns.UI.SettingsTab.Init(parent)
             end
         end)
     else
-        CreateCheckbox(child, L["SETTING_TOAST_CLICK_WHISPER"] or "Left-click toast to whisper (and dismiss)", -560,
+        CreateCheckbox(child, L["SETTING_TOAST_CLICK_WHISPER"] or "Left-click toast to whisper (and dismiss)", -508,
             function() return ns.db.settings.toastClickWhispers ~= false end,
             function(v) ns.db.settings.toastClickWhispers = v end)
     end
 
-    -- Alert sound (lives with the popup section)
-    local soundLabel = child:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    soundLabel:SetPoint("TOPLEFT", 4, -610)
-    soundLabel:SetTextColor(unpack(C.textMuted))
-    soundLabel:SetText(L["SECTION_SOUND"] or "Alert sound")
+    ----------------------------------------------------------------------
+    -- Alert sound (own section: enable + kit + quiet mode)
+    ----------------------------------------------------------------------
+    Header(L["SECTION_SOUND"] or "Alert sound", -548)
+    CreateCheckbox(child, L["SETTING_SOUND"] or "Play sound on alert", -574,
+        function() return ns.db.settings.soundEnabled end,
+        function(v) ns.db.settings.soundEnabled = v end)
+    CreateCheckbox(child, L["SETTING_QUIET_MODE"] or "Quiet mode (mute game sound during alerts)", -600,
+        function() return ns.db.settings.quietModeEnabled end,
+        function(v)
+            ns.db.settings.quietModeEnabled = v
+            if ns.SetFocusMode then ns.SetFocusMode(v) end
+        end)
 
-    local SOUNDS = {
-        { value = 11466, label = "Bell (default)" },
-        { value = 5274,  label = "Auction" },
-        { value = 3081,  label = "Map ping" },
-        { value = 8459,  label = "Raid warning" },
-        { value = 888,   label = "Level up" },
-        { value = 0,     label = "Silent" },
+    local soundChoiceLabel = child:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    soundChoiceLabel:SetPoint("TOPLEFT", 4, -630)
+    soundChoiceLabel:SetTextColor(unpack(C.textMuted))
+    soundChoiceLabel:SetText(L["SETTING_SOUND_CHOICE"] or "Sound:")
+
+    local SOUNDS = (ns.GetAlertSoundOptions and ns.GetAlertSoundOptions()) or {
+        { value = 8959,  label = "Raid Warning" },
+        { value = 8960,  label = "Ready Check" },
+        { value = 0,     label = "None" },
     }
     local soundDD = ns.CreateUIDropdown and ns.CreateUIDropdown(child, {
-        width = 180, height = 26, placeholder = "Bell (default)",
-        onSelect = function(value)
+        width = 180, height = 26, placeholder = "Raid Warning",
+        onSelect = function(value, label)
             if not ns.db then return end
             ns.db.settings.soundID = value
-            if value and value > 0 and PlaySound then
-                pcall(PlaySound, value)
+            -- Sound only (no toast / history)
+            if ns.PreviewAlertSound then
+                ns.PreviewAlertSound(value, label)
+            elseif value and value > 0 and PlaySound then
+                local ch = ns.db.settings.soundChannel or "Master"
+                pcall(PlaySound, value, ch)
             end
         end,
     })
     if soundDD then
-        soundDD:SetPoint("TOPLEFT", 4, -632)
+        soundDD:SetPoint("TOPLEFT", 4, -652)
         soundDD:SetOptions(SOUNDS)
         table.insert(settingsRefreshers, function()
             if ns.db and soundDD.SetValue then
-                soundDD:SetValue(ns.db.settings.soundID or 11466, true)
+                soundDD:SetValue(ns.db.settings.soundID or 8959, true)
             end
         end)
     end
 
-    Header(L["SECTION_REALM"] or "Realm compatibility", -670)
-    CreateCheckbox(child, L["SETTING_BLOCK_BAD_REALM"] or "Skip alerts when no owner shares the buyer's connected realm", -696,
+    local channelLabel = child:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    channelLabel:SetPoint("TOPLEFT", 4, -686)
+    channelLabel:SetTextColor(unpack(C.textMuted))
+    channelLabel:SetText(L["SETTING_SOUND_CHANNEL"] or "Audio channel:")
+
+    local CHANNELS = {
+        { value = "Master",   label = "Master (default)" },
+        { value = "SFX",      label = "SFX (Effects)" },
+        { value = "Dialog",   label = "Dialog" },
+        { value = "Ambience", label = "Ambience" },
+        { value = "Music",    label = "Music" },
+    }
+    local channelDD = ns.CreateUIDropdown and ns.CreateUIDropdown(child, {
+        width = 180, height = 26, placeholder = "Master (default)",
+        onSelect = function(value)
+            if not ns.db then return end
+            ns.db.settings.soundChannel = value or "Master"
+            -- Re-play current kit on the new channel
+            if ns.PreviewAlertSound then
+                ns.PreviewAlertSound(ns.db.settings.soundID)
+            end
+        end,
+    })
+    if channelDD then
+        channelDD:SetPoint("TOPLEFT", 4, -708)
+        channelDD:SetOptions(CHANNELS)
+        table.insert(settingsRefreshers, function()
+            if ns.db and channelDD.SetValue then
+                channelDD:SetValue(ns.db.settings.soundChannel or "Master", true)
+            end
+        end)
+    end
+
+    local channelHint = child:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    channelHint:SetPoint("TOPLEFT", 4, -740)
+    channelHint:SetPoint("RIGHT", child, "RIGHT", -8, 0)
+    channelHint:SetJustifyH("LEFT")
+    channelHint:SetWordWrap(true)
+    channelHint:SetTextColor(unpack(C.textMuted))
+    channelHint:SetText(L["SETTING_SOUND_CHANNEL_HINT"] or (
+        "Which volume slider controls the alert. Master is recommended "
+        .. "(heard even if Effects is low). Only change this if you know "
+        .. "you want alerts on SFX/Dialog instead."))
+
+    -- Preview full toast (sound + popup) without writing History
+    local previewAlertBtn = ns.CreateUIButton and ns.CreateUIButton(child, {
+        width = 160, height = 26,
+        text = L["BTN_PREVIEW_ALERT"] or "Preview alert",
+        variant = "ghost",
+    }) or CreateFrame("Button", nil, child, "UIPanelButtonTemplate")
+    previewAlertBtn:SetPoint("TOPLEFT", 4, -778)
+    if not ns.CreateUIButton then
+        previewAlertBtn:SetSize(160, 26)
+        previewAlertBtn:SetText("Preview alert")
+    end
+    previewAlertBtn:SetScript("OnClick", function()
+        if ns.PreviewAlertToast then
+            ns.PreviewAlertToast()
+        else
+            ns.Print("Preview not available.")
+        end
+    end)
+    previewAlertBtn:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_TOP")
+        GameTooltip:AddLine(L["BTN_PREVIEW_ALERT_TIP"] or
+            "Shows the alert popup and plays the sound — does not add a History row.", 1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+    previewAlertBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+    Header(L["SECTION_REALM"] or "Realm compatibility", -820)
+    CreateCheckbox(child, L["SETTING_BLOCK_BAD_REALM"] or "Skip alerts when no owner shares the buyer's connected realm", -846,
         function() return ns.db.settings.blockIncompatibleRealmAlerts end,
         function(v) ns.db.settings.blockIncompatibleRealmAlerts = v end)
-    CreateCheckbox(child, L["SETTING_SMART_REALM"] or "Smart crafter: pick a realm-compatible owner for the whisper", -722,
+    CreateCheckbox(child, L["SETTING_SMART_REALM"] or "Smart crafter: pick a realm-compatible owner for the whisper", -872,
         function() return ns.db.settings.smartRealmCrafter ~= false end,
         function(v) ns.db.settings.smartRealmCrafter = v end)
     local realmHint = child:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    realmHint:SetPoint("TOPLEFT", 4, -748)
+    realmHint:SetPoint("TOPLEFT", 4, -898)
     realmHint:SetPoint("RIGHT", child, "RIGHT", -8, 0)
     realmHint:SetJustifyH("LEFT")
     realmHint:SetWordWrap(true)
@@ -543,7 +618,7 @@ function ns.UI.SettingsTab.Init(parent)
     ----------------------------------------------------------------------
     -- Chat channels
     ----------------------------------------------------------------------
-    Header(L["SECTION_CHANNELS"] or "Chat channels", -790)
+    Header(L["SECTION_CHANNELS"] or "Chat channels", -940)
     local CHANNEL_OPTS = {
         { key = "trade", label = L["CH_TRADE"] or "Trade" },
         { key = "services", label = L["CH_SERVICES"] or "Services" },
@@ -556,7 +631,7 @@ function ns.UI.SettingsTab.Init(parent)
         { key = "raid", label = L["CH_RAID"] or "Raid" },
         { key = "instance", label = L["CH_INSTANCE"] or "Instance" },
     }
-    local chY = -816
+    local chY = -966
     for _, opt in ipairs(CHANNEL_OPTS) do
         local key = opt.key
         CreateCheckbox(child, opt.label, chY,

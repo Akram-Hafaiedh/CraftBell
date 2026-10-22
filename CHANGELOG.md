@@ -7,6 +7,23 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Planned
 
+## [0.1.6] — 2026-10-22
+
+### Added
+- **Alert sound** section in Settings (separated from General): enable sound, quiet mode, kit picker, and channel.
+- **Audio channel** selector (default **Master**): Master / SFX / Dialog / Ambience / Music, with a short hint so casual users leave Master alone.
+- **Preview alert** button: shows the toast and plays the sound **without** writing a History row (unlike `/cb test`).
+- Debug window sound tools: **Test sound**, **Preview all**, pick-sound dropdown; `/cb testsound [all|id]`.
+- Shared helpers `ns.ALERT_SOUNDS`, `ns.PreviewAlertSound`, `ns.PreviewAlertToast`.
+
+### Changed
+- Alert playback uses the selected channel (`PlaySound(id, channel)`); default remains Master for reliability when Effects is low.
+- Sound kit list uses official **SOUNDKIT** IDs (Raid Warning, Ready Check, Bonus Roll, PvP Flag, Auction House, Level Up, Epic Loot, Map Ping, Alarm Clock, None). Removed incorrect “Bell” / map-ping IDs.
+
+### Fixed
+- Default / broken sound kits that played the wrong clip (e.g. Illidan-style line labeled as Bell; map ping ID that was whisper ding).
+- Database default table syntax for `soundID` / `soundChannel` (comma placement).
+
 ## [0.1.5] — 2026-09-29
 
 ### Added

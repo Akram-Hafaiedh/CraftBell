@@ -6,8 +6,13 @@ local L = ns.L
 ----------------------------------------------------------------------
 local function PlayAlertSound()
     if not ns.db or not ns.db.settings.soundEnabled then return end
-    local soundID = ns.db.settings.soundID or 11466
+    local soundID = ns.db.settings.soundID or 8959
     if soundID <= 0 then return end
+    local channel = (ns.db.settings.soundChannel or "Master")
+
+    local function play()
+        pcall(PlaySound, soundID, channel)
+    end
 
     if ns.focusModeActive then
         ns.focusSoundCounter = ns.focusSoundCounter + 1
@@ -17,14 +22,14 @@ local function PlayAlertSound()
             local savedMaster = ns.focusModeSavedCVars["Sound_MasterVolume"]
             if savedMaster then SetCVar("Sound_MasterVolume", savedMaster) end
         end
-        PlaySound(soundID)
+        play()
         C_Timer.After(2.0, function()
             if ns.focusModeActive and ns.focusSoundCounter == myCounter then
                 SetCVar("Sound_EnableSFX", 0)
             end
         end)
     else
-        PlaySound(soundID)
+        play()
     end
 end
 
@@ -681,7 +686,8 @@ end
 ----------------------------------------------------------------------
 -- Show an alert for a recipe match
 ----------------------------------------------------------------------
-function ns.ShowAlert(sender, message, matches)
+function ns.ShowAlert(sender, message, matches, opts)
+    opts = type(opts) == "table" and opts or {}
     if ns.DebugStep then
         ns.DebugStep("showalert", true, "from " .. tostring(sender))
     end
@@ -819,19 +825,25 @@ function ns.ShowAlert(sender, message, matches)
         expandedWhisperPreview:SetText(whisperMsg and ("|cffff80b3" .. whisperMsg .. "|r") or "")
     end
 
-    local histEntry = ns.AddToHistory(sender, message, matches, historyDisplay)
-    currentHistoryEntry = histEntry
-    if ns.DebugStep then
-        ns.DebugStep("history", histEntry ~= nil,
-            histEntry and string.format("count=%s status=%s",
-                tostring(histEntry.count or 1), tostring(histEntry.status or "new")) or "nil")
-    end
-    if histEntry.count > 1 then
+    local histEntry
+    if opts.skipHistory then
+        currentHistoryEntry = nil
+        if ns.DebugStep then ns.DebugStep("history", true, "skipped (preview)") end
+    else
+        histEntry = ns.AddToHistory(sender, message, matches, historyDisplay)
+        currentHistoryEntry = histEntry
         if ns.DebugStep then
-            ns.DebugStep("toast", false, "skipped — duplicate open history (count=" .. tostring(histEntry.count) .. ")")
+            ns.DebugStep("history", histEntry ~= nil,
+                histEntry and string.format("count=%s status=%s",
+                    tostring(histEntry.count or 1), tostring(histEntry.status or "new")) or "nil")
         end
-        if ns.DebugEndRun then ns.DebugEndRun() end
-        return -- duplicate, toast already shown once
+        if histEntry and histEntry.count > 1 then
+            if ns.DebugStep then
+                ns.DebugStep("toast", false, "skipped — duplicate open history (count=" .. tostring(histEntry.count) .. ")")
+            end
+            if ns.DebugEndRun then ns.DebugEndRun() end
+            return -- duplicate, toast already shown once
+        end
     end
 
     PlayAlertSound()
@@ -1022,5 +1034,18 @@ end
 ----------------------------------------------------------------------
 -- Wire scanner / test events to the toast UI
 ----------------------------------------------------------------------
+
+--- Toast + sound only (Settings / debug). Does not write History.
+function ns.PreviewAlertToast()
+    if not ns.db or not ns.db.trackedRecipes or not next(ns.db.trackedRecipes) then
+        ns.Print(L["NO_RECIPE_TRACKED"] or "No recipes tracked yet — track one first.")
+        return
+    end
+    local firstID, firstData = next(ns.db.trackedRecipes)
+    local link = firstData.itemLink or firstData.recipeName or "item"
+    local msg = string.format(L["TEST_FAKE_MESSAGE"] or "LF someone to craft %s, will pay!", link)
+    ns.ShowAlert("Preview", msg, { [firstID] = firstData }, { skipHistory = true })
+end
+
 ns.RegisterCallback("ALERT_FIRED", ns.ShowAlert)
 ns.RegisterCallback("KEYWORD_ALERT_FIRED", ns.ShowKeywordAlert)

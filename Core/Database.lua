@@ -65,7 +65,8 @@ local defaults = {
     },
     settings = {
         soundEnabled = true,
-        soundID = 11466,
+        soundID = 8959,  -- SOUNDKIT.RAID_WARNING
+        soundChannel = "Master", -- Master | SFX | Ambience | Dialog | Music
         language = "en",
         -- Trade-chat language on this realm (examples + default triggers). Not UI language.
         chatLanguage = "en", -- en | fr | es
