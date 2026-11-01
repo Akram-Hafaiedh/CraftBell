@@ -118,6 +118,8 @@ local defaults = {
         bulkTrackAutoAssign = true, -- if recipe has no assignedCharacter, set current char
         -- Prefer recipes that appear on the Crafting Orders table (Blizzard filter)
         bulkTrackOrdersOnly = true,
+        -- Only add this character as owner of recipes already in trackedRecipes (no brand-new IDs)
+        bulkTrackExistingOnly = false,
         -- Per-expansion checklist: { [skillLineID] = true, ... }
         -- Empty table = "currently selected expansion only" (safe default).
         -- Non-empty = only the checked skill lines that this character has trained.
@@ -1213,6 +1215,8 @@ function ns.BulkTrackCurrentProfession(opts)
     local ordersOnly = opts.ordersOnly
     if ordersOnly == nil then ordersOnly = ns.db.settings.bulkTrackOrdersOnly end
     if ordersOnly == nil then ordersOnly = true end
+    local existingOnly = opts.existingOnly
+    if existingOnly == nil then existingOnly = ns.db.settings.bulkTrackExistingOnly end
 
     -- Legacy opts.scope support
     if opts.scope == "all" then opts.forceAll = true end
@@ -1286,6 +1290,9 @@ function ns.BulkTrackCurrentProfession(opts)
         and (L["BULK_MODE_ORDERS"] or "order-eligible")
         or (ordersOnly and (L["BULK_MODE_HEURISTIC"] or "order-style filter")
             or (L["BULK_MODE_ALL"] or "all recipes"))
+    if existingOnly then
+        modeLabel = (L["BULK_MODE_EXISTING"] or "existing tracked only") .. " + " .. modeLabel
+    end
 
     ns.Print(string.format(
         L["BULK_START"] or "Scanning %s — %d recipes (%s)…",
@@ -1322,6 +1329,9 @@ function ns.BulkTrackCurrentProfession(opts)
             local info = C_TradeSkillUI.GetRecipeInfo(recipeID)
 
             if not info or IsNonProductRecipe(recipeID, info) then
+                skipped = skipped + 1
+            elseif existingOnly and not (ns.db.trackedRecipes and ns.db.trackedRecipes[recipeID]) then
+                -- Keep curated lists: do not invent new recipe IDs on a fresh alt/realm
                 skipped = skipped + 1
             elseif ns.IsInformationalCategory(GetCategoryNameCached(info.categoryID)) then
                 skipped = skipped + 1

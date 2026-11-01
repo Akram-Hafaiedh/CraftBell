@@ -509,6 +509,7 @@ function ns.ShowBulkTrackDialog()
     Section(L["BULK_DIALOG_OPTS"] or "Options")
     local ordersOnly = ns.db and ns.db.settings.bulkTrackOrdersOnly ~= false
     local learnedOnly = ns.db and ns.db.settings.bulkTrackLearnedOnly
+    local existingOnly = ns.db and ns.db.settings.bulkTrackExistingOnly
     AddToggle(L["BULK_OPT_ORDERS"] or "Orders only", ordersOnly, function(v)
         ordersOnly = v
         if ns.db then ns.db.settings.bulkTrackOrdersOnly = v end
@@ -516,6 +517,10 @@ function ns.ShowBulkTrackDialog()
     AddToggle(L["BULK_OPT_LEARNED"] or "Learned only", learnedOnly, function(v)
         learnedOnly = v
         if ns.db then ns.db.settings.bulkTrackLearnedOnly = v end
+    end)
+    AddToggle(L["BULK_OPT_EXISTING"] or "Only already tracked (owner only)", existingOnly, function(v)
+        existingOnly = v
+        if ns.db then ns.db.settings.bulkTrackExistingOnly = v end
     end)
 
     y = y + 8
@@ -636,6 +641,7 @@ function ns.ShowBulkTrackDialog()
         ns.BulkTrackCurrentProfession({
             ordersOnly = ordersOnly,
             learnedOnly = learnedOnly,
+            existingOnly = existingOnly,
             categoryIDs = catFilter,
         })
         if currentRecipeID then

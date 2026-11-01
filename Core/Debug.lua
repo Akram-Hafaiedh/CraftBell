@@ -16,19 +16,32 @@ local logBuffer = {} -- { { t=, text= }, ... } newest last
 ns.debugLastRun = nil
 ns.debugCurrentRun = nil
 
+-- Full pipeline self-test (Run self-test)
 local STEP_ORDER_SELFTEST = {
     { key = "db",           label = "Database ready" },
+    { key = "version",      label = "Addon version" },
     { key = "recipes",      label = "Tracked recipes present" },
     { key = "cache",        label = "Scanner cache built" },
     { key = "callback",     label = "ALERT_FIRED has listeners" },
     { key = "synthetic",    label = "Synthetic message built" },
     { key = "match",        label = "Match path (FireCallback)" },
     { key = "showalert",    label = "ShowAlert entered" },
-    { key = "realm",        label = "Realm filter passed" },
-    { key = "charfilter",   label = "Current-char filter passed" },
+    { key = "realm",        label = "Realm filter (live path)" },
+    { key = "charfilter",   label = "Current-char filter" },
     { key = "whisper",      label = "Whisper template built" },
     { key = "history",      label = "History entry recorded" },
     { key = "toast",        label = "Toast shown" },
+}
+
+-- Realm-only self-test (Realm test button / /cb testrealm)
+local STEP_ORDER_REALM = {
+    { key = "version",       label = "Addon version" },
+    { key = "realm_api",     label = "Logged-in realm" },
+    { key = "realm_local",   label = "Own realm compatible" },
+    { key = "realm_foreign", label = "Foreign realm blocked" },
+    { key = "realm_owners",  label = "Owner breakdown" },
+    { key = "realm_setting", label = "Block setting" },
+    { key = "realm_effect",  label = "Would block other-realm crafts" },
 }
 
 local STEP_ORDER_LIVE = {
@@ -36,8 +49,8 @@ local STEP_ORDER_LIVE = {
     { key = "match",        label = "Recipe / keyword match" },
     { key = "callback",     label = "ALERT_FIRED fired" },
     { key = "showalert",    label = "ShowAlert entered" },
-    { key = "realm",        label = "Realm filter passed" },
-    { key = "charfilter",   label = "Current-char filter passed" },
+    { key = "realm",        label = "Realm filter" },
+    { key = "charfilter",   label = "Current-char filter" },
     { key = "whisper",      label = "Whisper template built" },
     { key = "history",      label = "History entry recorded" },
     { key = "toast",        label = "Toast shown" },
@@ -157,7 +170,7 @@ function ns.DebugBeginRun(mode, note)
     }
     ns.debugCurrentRun = run
     ns.DebugLog(string.format("── %s run started%s",
-        mode == "selftest" and "Self-test" or "Live",
+        mode == "selftest" and "Self-test" or (mode == "realmtest" and "Realm-test" or "Live"),
         note and (" — " .. note) or ""), { silent = not ns.DebugIsEnabled() })
     return run
 end
@@ -208,7 +221,7 @@ function ns.DebugEndRun()
         if s.ok then pass = pass + 1 else fail = fail + 1 end
     end
     ns.DebugLog(string.format("── %s run done — %d ok, %d fail",
-        run.mode == "selftest" and "Self-test" or "Live", pass, fail),
+        run.mode == "selftest" and "Self-test" or (run.mode == "realmtest" and "Realm-test" or "Live"), pass, fail),
         { silent = not ns.DebugIsEnabled() })
 
     if debugFrame and debugFrame:IsShown() then
@@ -221,6 +234,99 @@ end
 function ns.GetDebugRunForDisplay()
     return ns.debugCurrentRun or ns.debugLastRun
 end
+
+
+----------------------------------------------------------------------
+-- Realm filter self-test (multi-realm alts / connected groups)
+----------------------------------------------------------------------
+function ns.RunRealmSelfTest()
+    local wasDebug = ns.debugEnabled
+    ns.debugEnabled = true
+
+    ns.DebugBeginRun("realmtest", "realm filter only")
+
+    local tocVer = (C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version"))
+        or (GetAddOnMetadata and GetAddOnMetadata(addonName, "Version"))
+        or "?"
+    local codeVer = ns.ADDON_VERSION or "?"
+    ns.DebugStep("version", true,
+        tocVer == "@project-version@"
+            and (codeVer .. " (TOC packager placeholder)")
+            or string.format("code=%s toc=%s", codeVer, tocVer))
+
+    local myRealm = (GetRealmName and GetRealmName()) or ""
+    ns.DebugStep("realm_api", myRealm ~= "",
+        myRealm ~= "" and myRealm or "GetRealmName empty")
+
+    local sameOk = ns.IsRealmCompatible and ns.IsRealmCompatible(myRealm)
+    ns.DebugStep("realm_local", sameOk == true,
+        sameOk and "own realm OK" or "FAIL: own realm not compatible")
+
+    local foreignCompat = ns.IsRealmCompatible and ns.IsRealmCompatible("CraftBellFakeRealm999")
+    ns.DebugStep("realm_foreign", foreignCompat == false,
+        foreignCompat == false
+            and "fake foreign realm correctly blocked"
+            or "FAIL: filter is fail-open")
+
+    local localN, foreignN, noRealmN = 0, 0, 0
+    if ns.db and ns.db.trackedRecipes then
+        for _, data in pairs(ns.db.trackedRecipes) do
+            local any = false
+            for _, o in pairs(data.owners or {}) do
+                any = true
+                local r = (ns.OwnerRealm and ns.OwnerRealm(o)) or o.realm
+                if not r or r == "" then
+                    noRealmN = noRealmN + 1
+                elseif ns.IsRealmCompatible(r) then
+                    localN = localN + 1
+                else
+                    foreignN = foreignN + 1
+                end
+            end
+            if not any and data.assignedCharacter and ns.ParseNameRealm then
+                local _, r = ns.ParseNameRealm(data.assignedCharacter)
+                if not r or r == "" then
+                    noRealmN = noRealmN + 1
+                elseif ns.IsRealmCompatible(r) then
+                    localN = localN + 1
+                else
+                    foreignN = foreignN + 1
+                end
+            end
+        end
+    end
+    ns.DebugStep("realm_owners", true,
+        string.format("%d this realm/group · %d other · %d no realm field",
+            localN, foreignN, noRealmN))
+
+    local blockOn = ns.db and ns.db.settings and ns.db.settings.blockIncompatibleRealmAlerts
+    -- Setting OFF is a user choice, not a test failure
+    ns.DebugStep("realm_setting", true,
+        blockOn and "Block incompatible: ON" or "Block incompatible: OFF (optional)")
+
+    if blockOn then
+        ns.DebugStep("realm_effect", foreignCompat == false,
+            foreignCompat == false
+                and "Other-realm-only crafts are suppressed"
+                or "FAIL: Block is on but foreign realms still pass")
+    else
+        ns.DebugStep("realm_effect", true,
+            "Skipped — turn Block on in Settings to suppress other-realm crafts")
+    end
+
+    ns.DebugEndRun()
+    ns.debugEnabled = wasDebug
+
+    ns.Print(string.format(
+        "Realm test: you are on %s | owners %d local / %d other | block=%s",
+        myRealm ~= "" and myRealm or "?", localN, foreignN, tostring(blockOn and true or false)))
+    if foreignN > 0 and not blockOn then
+        ns.Print("Tip: enable “Skip alerts when no crafter is on this realm” under Settings → Realm.")
+    end
+    if ns.ToggleDebugWindow then ns.ToggleDebugWindow(true) end
+    return ns.debugLastRun
+end
+
 
 ----------------------------------------------------------------------
 -- Synthetic full-cycle self-test
@@ -235,6 +341,18 @@ function ns.RunSelfTest()
     -- 1. DB
     local dbOk = ns.db ~= nil
     ns.DebugStep("db", dbOk, dbOk and "CraftBellDB bound" or "ns.db is nil")
+
+    -- Version (TOC may be @project-version@ until packager expands it)
+    do
+        local tocVer = (C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version"))
+            or (GetAddOnMetadata and GetAddOnMetadata(addonName, "Version"))
+            or "?"
+        local codeVer = ns.ADDON_VERSION or "?"
+        ns.DebugStep("version", true,
+            tocVer == "@project-version@"
+                and (codeVer .. " (TOC packager placeholder)")
+                or string.format("code=%s toc=%s", codeVer, tocVer))
+    end
 
     -- 2. Recipes
     local nRecipes = 0
@@ -331,7 +449,12 @@ local debugFrame
 
 local function OrderedSteps(run)
     if not run then return {} end
-    local order = (run.mode == "selftest") and STEP_ORDER_SELFTEST or STEP_ORDER_LIVE
+    local order = STEP_ORDER_LIVE
+    if run.mode == "selftest" then
+        order = STEP_ORDER_SELFTEST
+    elseif run.mode == "realmtest" then
+        order = STEP_ORDER_REALM
+    end
     local out = {}
     local seen = {}
     for _, def in ipairs(order) do
@@ -384,7 +507,7 @@ local function EnsureDebugFrame()
     local title = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     title:SetPoint("TOPLEFT", 16, -14)
     title:SetTextColor(0.15, 0.75, 0.95)
-    title:SetText("CraftBell Debug")
+    title:SetText("CraftBell Debug  v" .. tostring(ns.ADDON_VERSION or "?"))
     f.title = title
 
     f.subtitle = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -462,8 +585,14 @@ local function EnsureDebugFrame()
         ns.RunSelfTest()
     end)
 
-    local copyBtn = MakeBtn("Copy all", "ghost", 90)
-    copyBtn:SetPoint("LEFT", selftestBtn, "RIGHT", 8, 0)
+        local realmTestBtn = MakeBtn("Realm test", "ghost", 100)
+    realmTestBtn:SetPoint("LEFT", selftestBtn, "RIGHT", 8, 0)
+    realmTestBtn:SetScript("OnClick", function()
+        if ns.RunRealmSelfTest then ns.RunRealmSelfTest() end
+    end)
+
+local copyBtn = MakeBtn("Copy all", "ghost", 90)
+    copyBtn:SetPoint("LEFT", realmTestBtn, "RIGHT", 8, 0)
     copyBtn:SetScript("OnClick", function()
         local run = ns.GetDebugRunForDisplay()
         local parts = { "=== CraftBell Debug ===", "" }
@@ -597,7 +726,7 @@ local function EnsureDebugFrame()
         local run = ns.GetDebugRunForDisplay()
         if run then
             f.subtitle:SetText(string.format("%s · %s",
-                run.mode == "selftest" and "Self-test" or "Live",
+                run.mode == "selftest" and "Self-test" or (run.mode == "realmtest" and "Realm-test" or "Live"),
                 run.startedStr or ""))
         else
             f.subtitle:SetText("No run yet")

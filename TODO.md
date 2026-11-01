@@ -4,6 +4,16 @@
 - [ ] Hear back from Loune-Hyjal (CurseForge) — personal fork vs PR vs public release with credit.
 - [ ] LICENSE (MIT recommended) once release path is clear.
 
+## Done in 0.1.8
+- [x] Realm filter fail-closed + keyword profession gate
+- [x] Realm self-test (`/cb testrealm`) cleaned up
+- [x] Bulk track “only already tracked” (owner-only for curated lists)
+- [x] Version display vs `@project-version@` TOC
+
+## CurseForge requests (next)
+- [ ] Custom alert sound pack / user sound file (SharedMedia or addon path)
+- [ ] Link / import tracked recipes from another Battle.net account (export string or file)
+
 ## Done in 0.1.2
 - [x] History UI search filter and status filtering (All / Open / Done / Rejected / Skipped)
 - [x] History multi-field sorting (Time / Sender / Status / Fee)

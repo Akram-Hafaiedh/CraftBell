@@ -468,25 +468,80 @@ function ns.ParseNameRealm(fullName)
     return fullName:sub(1, lastHyphen - 1), fullName:sub(lastHyphen + 1)
 end
 
--- Is the given realm one we can currently whisper without a realm suffix?
--- (i.e. the player's own realm, or a realm connected to it in the same shard)
--- Returns true/false. Falls back to true (assume compatible) if the client
--- API doesn't give us a connected-realm list, so this never blocks a whisper
--- it merely can't confirm.
+-- Normalize realm names ("Area 52" == "Area52", case-insensitive).
+function ns.NormalizeRealmName(realm)
+    if not realm or realm == "" then return "" end
+    return (tostring(realm):gsub("[%s%-%']+", ""):lower())
+end
+
+--- Realm for an owner record or Name-Realm string.
+function ns.OwnerRealm(owner)
+    if not owner then return nil end
+    if type(owner) == "string" then
+        if ns.ParseNameRealm then
+            local _, r = ns.ParseNameRealm(owner)
+            return r
+        end
+        return nil
+    end
+    if owner.realm and owner.realm ~= "" then return owner.realm end
+    if owner.fullName and ns.ParseNameRealm then
+        local _, r = ns.ParseNameRealm(owner.fullName)
+        return r
+    end
+    return nil
+end
+
+-- Compatible with the *logged-in* character's realm / connected group.
+-- Fail CLOSED when names differ and we cannot prove a connection (multi-realm alts).
 function ns.IsRealmCompatible(realm)
-    if not realm or realm == "" then return true end -- no realm suffix = same realm
-    local myRealm = GetRealmName()
-    if realm == myRealm then return true end
+    if not realm or realm == "" then
+        return false -- unknown realm is NOT "local" when Block is evaluating owners
+    end
+    local myRealm = GetRealmName and GetRealmName() or ""
+    if myRealm == "" then return true end
+
+    local want = ns.NormalizeRealmName(realm)
+    local mine = ns.NormalizeRealmName(myRealm)
+    if want == "" then return false end
+    if want == mine then return true end
+
     if GetAutoCompleteRealms then
         local realms = GetAutoCompleteRealms()
-        if realms then
+        if type(realms) == "table" then
             for _, r in ipairs(realms) do
-                if r == realm then return true end
+                if ns.NormalizeRealmName(r) == want then
+                    return true
+                end
             end
             return false
         end
     end
-    return true
+    return false
+end
+
+--- True if this recipe has at least one owner on the current realm/connected group.
+function ns.RecipeHasLocalOwner(recipeData)
+    if not recipeData then return false end
+    local owners = recipeData.owners or {}
+    local found = false
+    for key, o in pairs(owners) do
+        found = true
+        local r = ns.OwnerRealm(o)
+        if (not r or r == "") and type(key) == "string" then
+            r = ns.OwnerRealm(key)
+        end
+        if r and ns.IsRealmCompatible(r) then
+            return true
+        end
+    end
+    if not found and recipeData.assignedCharacter then
+        local r = ns.OwnerRealm(recipeData.assignedCharacter)
+        if r and ns.IsRealmCompatible(r) then
+            return true
+        end
+    end
+    return false
 end
 
 ----------------------------------------------------------------------

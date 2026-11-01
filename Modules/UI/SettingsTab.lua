@@ -372,8 +372,11 @@ function ns.UI.SettingsTab.Init(parent)
     CreateCheckbox(child, L["BULK_OPT_LEARNED"] or "Learned only", -346,
         function() return ns.db.settings.bulkTrackLearnedOnly end,
         function(v) ns.db.settings.bulkTrackLearnedOnly = v end)
+    CreateCheckbox(child, L["BULK_OPT_EXISTING"] or "Only recipes already tracked (add this character as owner)", -372,
+        function() return ns.db.settings.bulkTrackExistingOnly end,
+        function(v) ns.db.settings.bulkTrackExistingOnly = v end)
     local bulkScopeHint = child:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    bulkScopeHint:SetPoint("TOPLEFT", 4, -372)
+    bulkScopeHint:SetPoint("TOPLEFT", 4, -398)
     bulkScopeHint:SetPoint("RIGHT", child, "RIGHT", -8, 0)
     bulkScopeHint:SetJustifyH("LEFT")
     bulkScopeHint:SetWordWrap(true)
@@ -384,7 +387,7 @@ function ns.UI.SettingsTab.Init(parent)
     ----------------------------------------------------------------------
     -- Toast size + position
     ----------------------------------------------------------------------
-    Header(L["SECTION_TOAST"] or "Alert popup", -408)
+    Header(L["SECTION_TOAST"] or "Alert popup", -434)
 
     local toastSizeLabel = child:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     toastSizeLabel:SetPoint("TOPLEFT", 4, -428)

@@ -7,6 +7,33 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Planned
 
+## [0.1.8] — 2026-11-01
+
+### Added
+- **Bulk track: only already-tracked recipes** — add this character as owner of IDs already in your list; does not invent new recipes (keeps curated lists when leveling engi on a second realm).
+- **Realm self-test** cleanup: dedicated checklist (`/cb testrealm` / Debug → Realm test); Block OFF is informational, not a hard fail.
+- Version helpers: `ns.GetAddonVersion` / display prefers code version; TOC may stay `@project-version@` for the packager.
+
+### Fixed
+- **Multi-realm alerts**: fail-closed realm check (no longer treats unknown connected-realm lists as “compatible”). Owner realm from `owners` or `Name-Realm`.
+- **Keyword profession alerts** (e.g. Inscription / Leatherworking) respect Block when you have no local-realm owner for that profession.
+- Recipe alerts with Block ON require at least one matched recipe with a local-realm owner.
+- Debug window no longer mixes full pipeline “not run” rows into realm-only tests.
+
+### Changed
+- Settings/realm copy: Block is about **your logged-in realm**, not only the buyer’s realm.
+
+## [0.1.7] — 2026-10-27
+
+### Added
+- **Realm filter self-test** (`/cb testrealm` and Debug window → **Realm test**): checks own realm, foreign-realm blocking, owner breakdown, and Block setting.
+- **Version reporting**: `ns.ADDON_VERSION`, TOC `## Version`, `/cb version`, and debug window title so code vs TOC mismatches are visible.
+- Full self-test also runs realm unit checks before the synthetic alert path.
+
+### Fixed
+- **Multi-realm alts**: realm compatibility no longer fails open when `GetAutoCompleteRealms` is empty; different realms are treated as incompatible unless listed as connected. Owner realm resolved from `owners[].realm` or `Name-Realm`.
+- Settings copy clarifies that Block uses **your logged-in realm** (e.g. Darkspear crafts stay silent on Turalyon).
+
 ## [0.1.6] — 2026-10-22
 
 ### Added

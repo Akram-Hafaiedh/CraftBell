@@ -704,29 +704,29 @@ function ns.ShowAlert(sender, message, matches, opts)
         return
     end
 
-    -- Optional: skip if no crafter is realm-compatible with this client
+    -- Skip toast unless at least one matched recipe has an owner on this realm/group
     if ns.db and ns.db.settings.blockIncompatibleRealmAlerts and matches then
         local anyOk = false
-        for _, data in pairs(matches) do
-            local owners = data.owners or {}
-            local hasOwner = false
-            for _, o in pairs(owners) do
-                hasOwner = true
-                if o.realm and ns.IsRealmCompatible(o.realm) then
-                    anyOk = true
-                    break
-                end
-            end
-            if not hasOwner then
-                -- no owner map: treat as ok for this character
+        local myRealm = GetRealmName and GetRealmName() or "?"
+        for recipeID, data in pairs(matches) do
+            if ns.RecipeHasLocalOwner and ns.RecipeHasLocalOwner(data) then
                 anyOk = true
+                break
+            end
+            -- Fallback if helper missing
+            if not ns.RecipeHasLocalOwner then
+                for key, o in pairs(data.owners or {}) do
+                    local r = o.realm or (type(key) == "string" and key:match("%-(.+)$"))
+                    if r and ns.IsRealmCompatible(r) then anyOk = true break end
+                end
             end
             if anyOk then break end
         end
         if not anyOk then
-            ns.Debug("ShowAlert: blocked — no realm-compatible crafter")
+            ns.Debug(string.format(
+                "ShowAlert: blocked — no local-realm owner (you are on %s)", tostring(myRealm)))
             if ns.DebugStep then
-                ns.DebugStep("realm", false, "no realm-compatible crafter")
+                ns.DebugStep("realm", false, "no owner on " .. tostring(myRealm))
                 ns.DebugStep("toast", false, "blocked by realm filter")
             end
             if ns.DebugEndRun then ns.DebugEndRun() end
@@ -863,9 +863,47 @@ end
 function ns.ShowKeywordAlert(sender, message, kwMatches)
     if ns.DebugStep then
         ns.DebugStep("showalert", true, "keyword from " .. tostring(sender))
-        ns.DebugStep("realm", true, "n/a (keyword)")
-        ns.DebugStep("charfilter", true, "n/a (keyword)")
     end
+
+    -- When Block is on: if the keyword match names professions, only alert when
+    -- you have a local-realm owner for that profession (stops Inscription spam on
+    -- a realm where you only craft on another character's realm).
+    if ns.db and ns.db.settings.blockIncompatibleRealmAlerts then
+        local profs = (kwMatches and kwMatches.professions) or {}
+        if #profs > 0 then
+            local localProf = false
+            local myRealm = GetRealmName and GetRealmName() or "?"
+            for _, wantProf in ipairs(profs) do
+                local want = tostring(wantProf):lower()
+                for _, data in pairs((ns.db and ns.db.trackedRecipes) or {}) do
+                    local pname = (data.professionName or ""):lower()
+                    if pname ~= "" and (pname == want or pname:find(want, 1, true) or want:find(pname, 1, true)) then
+                        if ns.RecipeHasLocalOwner and ns.RecipeHasLocalOwner(data) then
+                            localProf = true
+                            break
+                        end
+                    end
+                end
+                if localProf then break end
+            end
+            if not localProf then
+                ns.Debug(string.format(
+                    "ShowKeywordAlert: blocked — no local owner for profession(s) on %s", tostring(myRealm)))
+                if ns.DebugStep then
+                    ns.DebugStep("realm", false, "keyword profession not local")
+                    ns.DebugStep("toast", false, "blocked by realm filter")
+                end
+                if ns.DebugEndRun then ns.DebugEndRun() end
+                return
+            end
+            if ns.DebugStep then ns.DebugStep("realm", true, "keyword profession has local owner") end
+        else
+            if ns.DebugStep then ns.DebugStep("realm", true, "keyword (no profession gate)") end
+        end
+    else
+        if ns.DebugStep then ns.DebugStep("realm", true, "n/a (block off)") end
+    end
+    if ns.DebugStep then ns.DebugStep("charfilter", true, "n/a (keyword)") end
 
     if ns.db and ns.db.settings.relayEnabled and not ns.isRelayedAlert then
         local parts = {}

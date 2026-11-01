@@ -31,6 +31,12 @@ Scan trade (and other) chat for crafting requests that match your tracked recipe
 | `/cb debugwin` | Open debug window & pipeline self-test |
 | `/cb history clear tests` | Remove synthetic test/debug rows from history |
 
+## Bulk track on a new realm/alt
+
+If you already have a curated tracked list on another character, enable **Settings → Bulk track → Only recipes already tracked** (or the same toggle in the Track All dialog). Track All then only adds **this character as owner** of existing recipe IDs — it will not flood the list with every order-eligible recipe (e.g. blues you never wanted).
+
+**Realm block:** with **Skip alerts when no crafter is on this realm** ON, toasts stay silent on realms where none of your owners live (e.g. Darkspear crafts while you play on Turalyon).
+
 ## Typical multi-alt flow
 
 1. On a trade-watching alt, get an alert → **Whisper** (offer).

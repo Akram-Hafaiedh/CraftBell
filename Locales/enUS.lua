@@ -324,3 +324,6 @@ L["SETTING_SOUND_CHANNEL"] = "Audio channel:"
 L["SETTING_SOUND_CHANNEL_HINT"] = "Which volume slider controls the alert. Master is recommended (heard even if Effects is low). Only change this if you know you want alerts on SFX/Dialog instead."
 L["BTN_PREVIEW_ALERT"] = "Preview alert"
 L["BTN_PREVIEW_ALERT_TIP"] = "Shows the alert popup and plays the sound — does not add a History row."
+L["BULK_OPT_EXISTING"] = "Only recipes already tracked (add this character as owner)"
+
+L["BULK_MODE_EXISTING"] = "existing tracked only"

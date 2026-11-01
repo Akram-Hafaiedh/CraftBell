@@ -1,4 +1,18 @@
 local addonName, ns = ...
+
+-- Single source of truth for in-game / debug (keep in sync with CHANGELOG + TOC)
+ns.ADDON_VERSION = "0.1.8"
+
+--- Display / logic version. TOC may be @project-version@ until packager expands it.
+function ns.GetAddonVersion()
+    return ns.ADDON_VERSION or "dev"
+end
+
+function ns.GetTocVersion()
+    local v = (C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version"))
+        or (GetAddOnMetadata and GetAddOnMetadata(addonName, "Version"))
+    return v or "?"
+end
 local L = ns.L
 
 ----------------------------------------------------------------------
@@ -26,8 +40,9 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
         if ns.UI and ns.UI.ApplyAppearance then
             ns.UI.ApplyAppearance()
         end
-        local version = C_AddOns.GetAddOnMetadata(addonName, "Version") or "?"
-        ns.Print("v" .. version .. " loaded.")
+        -- Prefer code version; TOC @project-version@ is normal until CurseForge packager expands it
+        local codeVer = ns.GetAddonVersion and ns.GetAddonVersion() or ns.ADDON_VERSION or "?"
+        ns.Print("v" .. tostring(codeVer) .. " loaded.")
         ns.FireCallback("DB_READY")
 
     elseif event == "PLAYER_LOGIN" then
@@ -109,6 +124,25 @@ SlashCmdList["CRAFTBELL"] = function(msg)
             ns.ToggleDebugWindow()
         else
             ns.Print("Debug window not available.")
+        end
+
+    elseif msg == "version" or msg == "ver" then
+        local codeVer = ns.GetAddonVersion and ns.GetAddonVersion() or ns.ADDON_VERSION or "?"
+        local tocVer = ns.GetTocVersion and ns.GetTocVersion() or "?"
+        if tocVer == "@project-version@" then
+            ns.Print(string.format("Version: %s (TOC placeholder @project-version@ — packager sets this on release zip)", codeVer))
+        elseif codeVer == tocVer then
+            ns.Print(string.format("Version: %s", codeVer))
+        else
+            ns.Print(string.format("Code: %s | TOC: %s — bump ns.ADDON_VERSION if this build is intentional", codeVer, tocVer))
+        end
+
+    elseif msg == "testrealm" or msg == "realmtest" then
+        if ns.RunRealmSelfTest then
+            ns.RunRealmSelfTest()
+            if ns.ToggleDebugWindow then ns.ToggleDebugWindow(true) end
+        else
+            ns.Print("Realm self-test not available.")
         end
 
     elseif msg == "testsound" or msg:match("^testsound ") then
@@ -234,6 +268,8 @@ SlashCmdList["CRAFTBELL"] = function(msg)
         ns.Print("  /cb toast — drag alert popup position")
         ns.Print("  /cb test / testcross / focus / debug")
         ns.Print("  /cb debugwin — open debug window (self-test + sound test)")
+        ns.Print("  /cb testrealm — realm filter self-test")
+        ns.Print("  /cb version — show code vs TOC version")
         ns.Print("  /cb testsound [all|id] — preview alert sound")
         ns.Print("  /cb history clear — wipe history queue")
         ns.Print("  /cb history clear tests — remove CBSelfTest / TestBuyer rows")
